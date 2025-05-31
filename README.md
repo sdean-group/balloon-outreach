@@ -10,7 +10,7 @@ To run the simulation in Google Colab, follow these steps:
 2. Create a new notebook
 3. Copy and paste the following code into separate cells:
 
-### Cell 1: Clone repository and install dependencies
+### Cell 1-1 (for public repository): Clone repository and install dependencies 
 ```python
 # Clone the repository
 !git clone https://github.com/sdean-group/balloon-outreach.git
@@ -20,6 +20,23 @@ To run the simulation in Google Colab, follow these steps:
 # Install required packages
 !pip install numpy matplotlib
 ```
+### Cell 1-2 (for private repository): Clone repository and install dependencies 
+```python
+# Clone the repository
+from getpass import getpass
+username = "your-github-username"  
+token = getpass("Enter your GitHub Personal Access Token: ")
+
+repo_url = f"https://{username}:{token}@github.com/sdean-group/balloon-outreach.git"
+
+!git clone $repo_url
+%cd balloon-outreach
+!git checkout v0
+
+# Install required packages
+!pip install numpy matplotlib
+```
+
 
 ### Cell 2: Import modules
 ```python
