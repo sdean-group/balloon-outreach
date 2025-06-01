@@ -17,5 +17,5 @@ class RandomAgent:
         """
         # Generate a single random action in range [-1, 1]
         action = np.random.uniform(-1.0, 1.0)
-        action = -0.5
+        action = 0.5
         return np.array([action])  # Return as numpy array for compatibility 
