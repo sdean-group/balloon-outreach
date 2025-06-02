@@ -208,16 +208,21 @@ class WindField:
         self.u_data = u_base + u_noise + u_offset
         self.v_data = v_base + v_noise + v_offset
 
+    # def get_wind(self, x: float, y: float, pressure: float, time: float) -> WindVector:
+    #     """
+    #     Interpolate wind vector at a given (lon, lat, pressure, time).
+    #     """
+    #     point = np.array([time, y, x, pressure])
+
+    #     # Interpolate u and v components
+    #     u_interp = interpn(self.grid, self.u_data, point,
+    #                        method='linear', bounds_error=False, fill_value=None)
+    #     v_interp = interpn(self.grid, self.v_data, point,
+    #                        method='linear', bounds_error=False, fill_value=None)
+
+    #     return WindVector(float(u_interp), float(v_interp))
     def get_wind(self, x: float, y: float, pressure: float, time: float) -> WindVector:
-        """
-        Interpolate wind vector at a given (lon, lat, pressure, time).
-        """
-        point = np.array([time, y, x, pressure])
-
-        # Interpolate u and v components
-        u_interp = interpn(self.grid, self.u_data, point,
-                           method='linear', bounds_error=False, fill_value=None)
-        v_interp = interpn(self.grid, self.v_data, point,
-                           method='linear', bounds_error=False, fill_value=None)
-
-        return WindVector(float(u_interp), float(v_interp))
+    # """
+    # Return wind for testing.
+    # """
+        return WindVector(np.random.uniform(20, 40), np.random.uniform(-2, 5))
