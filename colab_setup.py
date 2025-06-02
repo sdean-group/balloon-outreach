@@ -4,8 +4,7 @@
 !git checkout v0
 
 # Install required packages
-!pip install numpy matplotlib
-
+!pip install numpy matplotlib scipy
 # Import necessary modules
 import sys
 sys.path.append('.')
