@@ -34,7 +34,7 @@ repo_url = f"https://{username}:{token}@github.com/sdean-group/balloon-outreach.
 !git checkout v0
 
 # Install required packages
-!pip install numpy matplotlib
+!pip install numpy matplotlib scipy
 ```
 
 
