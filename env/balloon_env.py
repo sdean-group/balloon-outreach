@@ -1,14 +1,10 @@
-import numpy as np
+import math
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from typing import Tuple, List
 from env.wind_field import WindField, WindVector
 # Enable interactive mode
 plt.ion()
-import numpy as np
-
-import numpy as np
-
 class WindVector:
     """Wind vector (simple structure)"""
     def __init__(self, u: float, v: float):
