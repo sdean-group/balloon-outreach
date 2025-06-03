@@ -46,87 +46,52 @@ sys.path.append('.')
 from env.balloon_env import BalloonEnvironment
 from agent.random_agent import RandomAgent
 import numpy as np
+import time
 import matplotlib.pyplot as plt
 %matplotlib inline
 ```
 
 ### Cell 3: Run simulation with random agent
 ```python
-# Create environment and agent
-env = BalloonEnvironment()
-agent = RandomAgent()
-
-# Reset environment
-state = env.reset()
-done = False
-total_reward = 0
 
 # Run simulation
-while not done:
-    # Select action
-    action = agent.select_action(state)
-    
-    # Take step in environment
-    state, reward, done, info = env.step(action)
-    total_reward += reward
-    
-    # Render the environment
-    env.render()
-    
-    # Print current state
-    print(f"\nStep completed:")
-    print(f"Action: {action[0]:.2f}")
-    print(f"Reward: {reward:.2f}")
-    print(f"Total reward: {total_reward:.2f}")
-    print(f"Done: {done}")
-    print(f"Info: {info}")
-    
-    # Add a small delay to make the visualization smoother
-    import time
-    time.sleep(0.1)
-
-print(f"\nSimulation completed with total reward: {total_reward:.2f}")
-```
-
-### Cell 4: Try different actions
-```python
+# Create environment and agent
+env = BalloonEnvironment()
+# agent = RandomAgent()
+agent = GoalDirectedAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
 # Reset environment
 state = env.reset()
 done = False
 total_reward = 0
+max_episode_steps = 100
+# Run simulation
+for _ in range(max_episode_steps):
+    # Select action
+    action = agent.select_action(state)
 
-# Run simulation with fixed action
-action = np.array([-0.5])  # Try different values between -1 and 1
-
-while not done:
     # Take step in environment
     state, reward, done, info = env.step(action)
     total_reward += reward
-    
+
     # Render the environment
     env.render()
-    
-    # Print current state
-    print(f"\nStep completed:")
-    print(f"Action: {action[0]:.2f}")
-    print(f"Reward: {reward:.2f}")
-    print(f"Total reward: {total_reward:.2f}")
-    print(f"Done: {done}")
-    print(f"Info: {info}")
-    
-    # Add a small delay
+    if done:
+      break
+
+    # Add a small delay to make the visualization smoother
     time.sleep(0.1)
 
 print(f"\nSimulation completed with total reward: {total_reward:.2f}")
 ```
+
 
 4. Run each cell in sequence
 
 ## Action Space
 
 The simulation uses a single continuous action in the range [-1, 1]:
-- Negative values: Drop sand (magnitude determines amount)
-- Positive values: Vent gas (magnitude determines rate)
+- Negative values: Drop sand (magnitude determines amount)-> UP
+- Positive values: Vent gas (magnitude determines rate) -> DOWN
 
 ## Visualization
 
