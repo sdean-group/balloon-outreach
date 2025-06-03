@@ -3,8 +3,6 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from typing import Tuple, List
 from env.wind_field import WindField, WindVector
-import math
-# from env.balloon import balloon
 # Enable interactive mode
 plt.ion()
 import numpy as np
@@ -113,14 +111,14 @@ class WindVector:
 #         print(f"Volume: {self.volume:.2f} m³, Sand: {self.sand:.2f} kg, Vertical Vel.: {self.vertical_velocity:.2f} m/s")
 class Balloon:
     def __init__(self,
-                 initial_lat: float,  # degrees
-                 initial_lon: float,  # degrees
-                 initial_alt: float,  # meters (no more confusion!)
-                 max_volume: float = 3000.0,  # m³
-                 max_sand: float = 30.0):     # kg
+                 initial_lat: float,  # km
+                 initial_lon: float,  # km
+                 initial_alt: float,  # km
+                 max_volume: float = 1000.0,  # m³
+                 max_sand: float = 100):     # kg
         self.lat = initial_lat
         self.lon = initial_lon
-        self.alt = initial_alt  # meters, no multiplication!
+        self.alt = initial_alt # km   
         self.volume = max_volume
         self.sand = max_sand
         self.max_volume = max_volume
@@ -147,13 +145,21 @@ class Balloon:
         return self.helium_density * np.exp(altitude / 7000.0)
 
     def step(self, wind: WindVector, dt: float, action: float = 0.0) -> None:
-        """Update balloon state."""
-        # 1️⃣ Horizontal motion (latitude & longitude update)
-        self.lat += wind.u * dt / (self.EARTH_RADIUS * self.DEG_TO_RAD)
-        self.lon += wind.v * dt / (self.EARTH_RADIUS * self.DEG_TO_RAD)
+        """
+        Update the balloon's state using terminal velocity equilibrium:
+        - action=0: altitude remains nearly steady (±10m)
+        - action>0: volume reduction → always descending
+        - action<0: sand reduction → always ascending
+        """
+        # # 1️⃣ Horizontal motion (latitude & longitude update)
+        # self.lat += wind.u * dt / (self.EARTH_RADIUS * 1000 * self.DEG_TO_RAD)
+        # self.lon += wind.v * dt / (self.EARTH_RADIUS * 1000 * self.DEG_TO_RAD)
+        # 1️⃣ Horizontal motion (latitude & longitude updates in km)
+        self.lat += wind.u * dt / 1000
+        self.lon += wind.v * dt / 1000
 
-        # 2️⃣ Forces
-        rho_air = self.get_air_density(self.alt)
+        # 2️⃣ Compute buoyancy and weight forces
+        rho_air = self.get_air_density(self.alt*1000)
         helium_mass = self.helium_density * self.volume
         total_mass = self.balloon_mass + self.sand + helium_mass
 
@@ -184,34 +190,25 @@ class Balloon:
                 d_sand = self.max_sand_rate * (-action) * dt
                 self.sand = max(0.0, self.sand - d_sand)
 
-        # 5️⃣ Altitude Update
-        self.alt += self.vertical_velocity * dt
-        if self.alt < 5000.0:
-            self.alt = 5000.0
-            self.vertical_velocity = 0.0
+        # 5️⃣ Update altitude
+        self.alt += self.vertical_velocity * dt / 1000
 
-        # Clamp
-        self.alt = np.clip(self.alt, 5000.0, 25000.0)
+        # Clamp altitude to [5 km, 25 km]
+        self.alt = np.clip(self.alt, 5.0, 25.0)
 
-        # Debug
-        print(f"Lat: {self.lat:.6f}°, Lon: {self.lon:.6f}°, Alt: {self.alt/1000:.2f} km")
+        # Debug output
+        print(f"Lat: {self.lat:.6f}km, Lon: {self.lon:.6f}km, Alt: {self.alt:.2f} km")
         print(f"Volume: {self.volume:.2f} m³, Sand: {self.sand:.2f} kg, Vertical Vel.: {self.vertical_velocity:.2f} m/s")
+
 
 class BalloonEnvironment:
     """Environment for balloon navigation"""
     def __init__(self):
         self.wind_field = WindField()
-        self.balloon = Balloon(
-            initial_lat=np.random.uniform(30.0, 45.0),
-            initial_lon=np.random.uniform(-120.0, -70.0),
-            initial_alt=18000.0,  # meters
-            max_volume=3000.0,
-            max_sand=30.0
-        )
-        self.dt = 300  # 1 hour time step
-        self.target_lat = self.balloon.lat + 3.0
-        self.target_lon = self.balloon.lon + 5.0
-        self.target_altitude = 18000.0  # meters
+        self.balloon = Balloon(initial_lat=0.0, initial_lon=0.0, initial_alt=10.0)
+        self.dt = 60  # 1 minute time step (reduced from 1 hour)
+        self.target_lat = 500  # km
+        self.target_lon = -100  # km
         self.current_time = 0.0  # hours
 
         # Plotting
@@ -221,6 +218,10 @@ class BalloonEnvironment:
         self.ax3 = self.fig.add_subplot(133)
         plt.tight_layout()
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
+        # Add initial position to trajectory
+        self.trajectory['lat'].append(self.balloon.lat)
+        self.trajectory['lon'].append(self.balloon.lon)
+        self.trajectory['alt'].append(self.balloon.alt)
 
    
     def reset(self) -> np.ndarray:
@@ -234,6 +235,10 @@ class BalloonEnvironment:
         )
         self.current_time = 0.0
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
+        # Add initial position to trajectory
+        self.trajectory['lat'].append(self.balloon.lat)
+        self.trajectory['lon'].append(self.balloon.lon)
+        self.trajectory['alt'].append(self.balloon.alt)
         return self._get_state()
     
     def haversine_distance(self):
@@ -456,7 +461,7 @@ class BalloonEnvironment:
         self.ax2.clear()
         self.ax3.clear()
 
-        # Update trajectory
+        # Update trajectory with current position
         self.trajectory['lat'].append(self.balloon.lat)
         self.trajectory['lon'].append(self.balloon.lon)
         self.trajectory['alt'].append(self.balloon.alt)
@@ -466,31 +471,30 @@ class BalloonEnvironment:
         lons = np.array(self.trajectory['lon'])
         alts = np.array(self.trajectory['alt'])
 
-        # Plot 3D trajectory
-        if len(lats) > 1:  # Only plot line if we have more than one point
-            self.ax1.plot(lons, lats, alts, 'b-', alpha=0.5, label='Trajectory')
-
+        # Plot trajectory
+        if len(lats) > 1:
+            self.ax1.plot(lons, lats, alts, 'b-', linewidth=2, label='Trajectory')
         # Plot current position
         self.ax1.scatter(lons[-1], lats[-1], alts[-1],
-                        c='b', marker='o', s=100, label='Current Position')
+                        c='red', marker='o', s=150, label='Current Position')
 
-        # Plot start and target
-        self.ax1.scatter(0, 0, 10, c='g', marker='o', s=100, label='Start')
-        self.ax1.scatter(self.target_lon, self.target_lat, 10, c='r', marker='o', s=100, label='Target')
+        # Plot target
+        self.ax1.scatter(self.target_lon, self.target_lat, 10,
+                        c='green', marker='*', s=200, label='Target')
 
         # Set labels and title
-        self.ax1.set_xlabel('Longitude')
-        self.ax1.set_ylabel('Latitude')
+        self.ax1.set_xlabel('Longitude (km)')
+        self.ax1.set_ylabel('Latitude (km)')
         self.ax1.set_zlabel('Altitude (km)')
-        self.ax1.set_title('Balloon Trajectory')
+        self.ax1.set_title('Balloon Navigation')
 
-        # Set view limits
-        self.ax1.set_xlim(min(lons) - 1, max(lons) + 1)
-        self.ax1.set_ylim(min(lats) - 1, max(lats) + 1)
-        self.ax1.set_zlim(0, 20)  # Altitude range
+        # Set view limits with some padding
+        # self.ax1.set_xlim(min(lons) - 10, max(lons) + 10)
+        # self.ax1.set_ylim(min(lats) - 10, max(lats) + 10)
 
-        # Set equal aspect ratio for lat/lon
-        self.ax1.set_box_aspect([1, 1, 1])
+        self.ax1.set_xlim(-10, 10)
+        self.ax1.set_ylim(-10, 10)
+        self.ax1.set_zlim(0, 25)  # Altitude range in km
 
         # Add legend
         self.ax1.legend()
@@ -525,5 +529,5 @@ class BalloonEnvironment:
         # Update the plot
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
-        plt.pause(0.5)  # Increased pause time for better visualization
+        plt.pause(0.1)  # Reduced pause time for smoother animation
 

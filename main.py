@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 from agent.goal_agent import GoalDirectedAgent
 
 
-def run_episode(env: BalloonEnvironment, agent: GoalDirectedAgent, max_steps: int = 50, target_lat: float = None, target_lon: float = None) -> float:
-    state = env.reset()
+def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 1000) -> float:
+    """Run one episode with the given agent"""
+# def run_episode(env: BalloonEnvironment, agent: GoalDirectedAgent, max_steps: int = 50, target_lat: float = None, target_lon: float = None) -> float:
+#     state = env.reset()
 
     # If not passed in, define target from initial state
     if target_lat is None:
@@ -29,6 +31,12 @@ def run_episode(env: BalloonEnvironment, agent: GoalDirectedAgent, max_steps: in
 
         trajectory.append((state[0], state[1]))
         altitudes.append(state[2])
+        print(f"Step {step}: lat: {state[0]:.2f}, lon: {state[1]:.2f}, alt: {state[2]:.2f}")
+        
+        # Render every 2 hours
+        # if step % 2 == 0:
+        env.render()
+        
         print(f"Step {step}: lat={state[0]:.2f}, lon={state[1]:.2f}, alt={state[2]:.2f}")
 
         if step % 2 == 0:
