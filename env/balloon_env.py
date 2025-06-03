@@ -116,6 +116,7 @@ class BalloonEnvironment:
         self.dt = 60  # 1 minute time step (reduced from 1 hour)
         self.target_lat = 500  # km
         self.target_lon = -100  # km
+        self.target_alt = 12  # km
         self.current_time = 0.0  # hours
 
         # Initialize figure for real-time plotting

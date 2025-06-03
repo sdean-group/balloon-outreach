@@ -1,6 +1,7 @@
 import numpy as np
 from env.balloon_env import BalloonEnvironment
 from agent.random_agent import RandomAgent
+from agent.goal_agent import GoalDirectedAgent
 import matplotlib.pyplot as plt
 
 def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 1000) -> float:
@@ -15,7 +16,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     for step in range(max_steps):
         # Get action from agent
         action = agent.select_action(state)
-        
+        # print(action)
         # Take step
         state, reward, done, info = env.step(action)
         total_reward += reward
@@ -64,8 +65,8 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
 def main():
     # Create environment and agent
     env = BalloonEnvironment()
-    agent = RandomAgent()
-    
+    # agent = RandomAgent()
+    agent = GoalDirectedAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
     # Run one episode
     reward = run_episode(env, agent)
     print(f"Episode finished with total reward: {reward:.2f}")
