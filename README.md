@@ -89,9 +89,8 @@ print(f"\nSimulation completed with total reward: {total_reward:.2f}")
 
 ## Action Space
 
-The simulation uses a single continuous action in the range [-1, 1]:
-- Negative values: Drop sand (magnitude determines amount)-> UP
-- Positive values: Vent gas (magnitude determines rate) -> DOWN
+The simulation uses a single continuous action in the range [-1, 1]. 
+Action indicates target vertical velocity of the balloon in m/s
 
 ## Visualization
 

@@ -11,11 +11,9 @@ class RandomAgent:
             state: Current state of the environment
             
         Returns:
-            action: Single continuous action in range [-1, 1]
-                   Negative values: drop sand (magnitude determines amount)
-                   Positive values: vent gas (magnitude determines rate)
+            action: Single continuous action in range [-1, 1] [m/s]
+                   
         """
         # Generate a single random action in range [-1, 1]
         action = np.random.uniform(-1.0, 1.0)
-        action = 0
         return np.array([action])  # Return as numpy array for compatibility 

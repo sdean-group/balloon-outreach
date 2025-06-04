@@ -20,7 +20,7 @@ class Balloon:
                  initial_lat: float,  # km
                  initial_lon: float,  # km
                  initial_alt: float,  # km
-                 max_volume: float = 1000.0,  # m³
+                 max_volume: float = 1000.0,  # m³ reflect BLE parameters on initial volume and mass (max_volume 1800, load 92.5, balloon 68.5)
                  max_sand: float = 100):     # kg
         self.lat = initial_lat
         self.lon = initial_lon
@@ -33,22 +33,148 @@ class Balloon:
         # Constants
         self.EARTH_RADIUS = 6371  # km
         self.DEG_TO_RAD = np.pi / 180.0
-        self.balloon_mass = 50.0  # kg
+        self.balloon_mass = 68.5
         self.helium_density = 0.1786  # kg/m³ at STP
         self.air_density0 = 1.225  # kg/m³ at sea level
         self.gravity = 9.81  # m/s²
         self.vertical_velocity = 0.0
-        # Control rates
-        self.max_vent_rate = 0.1  # m³/s (maximum venting rate)
-        self.max_sand_rate = 0.1  # kg/s (maximum sand dropping rate)
+        self.temperature = 220  # K
+        self.R = 287.05  # Gas constant for dry air in J/(kg·K)
+        # Control rates (reduced for more gentle control)
+        self.max_vent_rate = self.max_volume * 0.01  # m³/dt
+        self.max_sand_rate = self.max_sand * 0.01  # kg/dt
+        self.pressure_pre = self.altitude_to_pressure(self.alt * 1000)
+        self.max_velocity = 1.0  # m/s
 
     def get_air_density(self, altitude: float) -> float:
         """Compute air density at the given altitude (exponential decay model)"""
         return self.air_density0 * np.exp(-altitude / 7000.0)
 
+    def altitude_to_pressure(self, altitude_m: float) -> float:
+        """
+        Calculate pressure at given altitude using the barometric formula.
+        
+        Args:
+            altitude_m: Altitude in meters
+            
+        Returns:
+            pressure: Pressure in hectopascals (hPa)
+            
+        Formula: P = P₀ * exp(-Mgh/RT)
+        where:
+        - P₀ = sea level pressure (1013.25 hPa)
+        - M = molar mass of air (0.02896 kg/mol)
+        - g = gravitational acceleration (9.81 m/s²)
+        - h = height above sea level (m)
+        - R = universal gas constant (8.314 J/(mol·K))
+        - T = temperature (K)
+        """
+        # Constants
+        P0 = 1013.25  # Sea level pressure (hPa)
+        M = 0.02896   # Molar mass of air (kg/mol)
+        g = 9.81      # Gravitational acceleration (m/s²)
+        R = 8.314     # Universal gas constant (J/(mol·K))
+        
+        # Temperature varies with altitude
+        # Using a simple linear lapse rate model
+        T0 = 288.15   # Sea level temperature (K)
+        L = 0.0065    # Temperature lapse rate (K/m)
+        T = T0 - L * altitude_m  # Temperature at altitude
+        
+        # Calculate pressure using barometric formula
+        pressure = P0 * np.exp(-M * g * altitude_m / (R * T))
+        
+        return pressure
+
     def get_helium_density(self, altitude: float) -> float:
         """Compute helium density at altitude (optional, for more precision)"""
         return self.helium_density * np.exp(altitude / 7000.0)
+
+    def internal_controller(self, v_target: float, dt: float, pressure: float):
+        # 시스템 파라미터 계산
+        helium_mass = self.helium_density * self.volume
+        total_mass = self.balloon_mass + self.sand + helium_mass
+        rho_air = (pressure * 100) / (self.R * self.temperature)
+
+        # Calculate current forces
+        buoyancy = rho_air * self.volume * self.gravity
+        weight = total_mass * self.gravity
+        drag = self.drag_force(pressure)
+        F_current = buoyancy - weight - drag
+
+        # Calculate target force for desired velocity
+        # At equilibrium, F = 0, so we need to adjust buoyancy/weight to achieve target velocity
+        # Use a simple proportional control on the velocity error
+        Kp = 0.0005  # Small proportional gain
+        velocity_error = v_target - self.vertical_velocity
+        
+        # Calculate required force change
+        # Scale the force change by mass to get proper acceleration
+        F_target = F_current + Kp * velocity_error * total_mass
+
+        # Calculate required changes in volume and mass
+        dSand = 0.0
+        dVolume = 0.0
+
+        if F_target < F_current:  # Need to reduce buoyancy
+            # Calculate new volume needed for target force
+            V_new = (F_target + weight + drag) / (rho_air * self.gravity)
+            dVolume = self.volume - V_new
+            # Limit to 5% of max vent rate
+            dVolume = np.clip(dVolume, 0.0, self.max_vent_rate * 0.05)
+        else:  # Need to reduce weight
+            # Calculate new mass needed for target force
+            m_new = (F_target + drag) / self.gravity
+            dSand = total_mass - m_new
+            # Limit to 5% of max sand rate
+            dSand = np.clip(dSand, 0.0, self.max_sand_rate * 0.05)
+
+        # Add a small damping term to prevent oscillations
+        if abs(velocity_error) < 0.1:  # If close to target velocity
+            dVolume *= 0.1  # Reduce control action
+            dSand *= 0.1
+
+        return dVolume, dSand
+
+    def drag_force(self, pressure: float):
+        cross_section = np.pi * (3 * self.volume / (4 * np.pi)) ** (2/3)
+        rho_air = (pressure * 100) / (self.R * self.temperature)
+        # drag = 0.5 * self.get_air_density(self.alt*1000) * self.vertical_velocity**2 * 0.47 * cross_section
+        # Drag coefficient (varies with Reynolds number)
+        # Reynolds number depends on air density and viscosity
+        kinematic_viscosity = 1.5e-5 * (1013.25/pressure)  # Viscosity increases with altitude
+        
+        # Handle zero velocity case
+        if abs(self.vertical_velocity) < 1e-6:
+            reynolds_number = 1e-6  # Small non-zero value to avoid division by zero
+        else:
+            reynolds_number = abs(self.vertical_velocity) * np.sqrt(cross_section) / kinematic_viscosity
+        
+        # Drag coefficient varies with Reynolds number
+        if reynolds_number < 1:
+            drag_coefficient = 24.0  # Stokes flow limit
+        elif reynolds_number < 1000:
+            drag_coefficient = 24/reynolds_number * (1 + 0.15 * reynolds_number**0.687)  # Transitional
+        else:
+            drag_coefficient = 0.47  # Turbulent flow
+            
+        # Add altitude effect on drag coefficient (reduced effect)
+        drag_coefficient *= (1 + 0.05 * (self.alt/10))
+        
+        # Add base drag coefficient to make drag stronger overall
+        # drag_coefficient += 0.5  # Base drag coefficient
+        
+        # Handle zero velocity case for drag force
+        if abs(self.vertical_velocity) < 1e-6:
+            drag_force = 0.0
+        else:
+            # Drag force (F_d = 0.5 * ρ * v² * C_d * A)
+            drag_force = 0.5 * rho_air * self.vertical_velocity**2 * drag_coefficient * cross_section
+            
+            # Add a linear drag component for better low-velocity behavior
+            linear_drag = 0.1 * rho_air * abs(self.vertical_velocity) * cross_section
+            drag_force += linear_drag
+        return drag_force
 
     def step(self, wind: WindVector, dt: float, action: float = 0.0) -> None:
         """
@@ -57,62 +183,72 @@ class Balloon:
         - action>0: volume reduction → always descending
         - action<0: sand reduction → always ascending
         """
-        # # 1️⃣ Horizontal motion (latitude & longitude update)
-        # self.lat += wind.u * dt / (self.EARTH_RADIUS * 1000 * self.DEG_TO_RAD)
-        # self.lon += wind.v * dt / (self.EARTH_RADIUS * 1000 * self.DEG_TO_RAD)
         # 1️⃣ Horizontal motion (latitude & longitude updates in km)
+        # print(f"target velocity: {action:.2f} m/s")
         self.lat += wind.u * dt / 1000
         self.lon += wind.v * dt / 1000
+        pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
+        dVolume, dSand = self.internal_controller(action, dt, pressure)
+        self.volume -= dVolume
+        self.sand -= dSand
+        
+        # 2️⃣ Compute air properties at current altitude
 
-        # 2️⃣ Compute buoyancy and weight forces
-        rho_air = self.get_air_density(self.alt*1000)
+        
+        # Calculate air density using ideal gas law: ρ = P/(R*T)
+        rho_air = (pressure * 100) / (self.R * self.temperature)  # Convert hPa to Pa
+        
+        # 3️⃣ Update balloon volume based on pressure (Boyle's law)
+        if not hasattr(self, 'initial_volume'):
+            self.initial_volume = self.volume
+        self.volume = self.volume * (self.pressure_pre / pressure)
+        
+        # 4️⃣ Compute forces
         helium_mass = self.helium_density * self.volume
         total_mass = self.balloon_mass + self.sand + helium_mass
-
+        
+        # Buoyancy force (F_b = ρ_air * V * g)
         buoyancy_force = rho_air * self.volume * self.gravity
+        
+        # Weight force (F_w = m * g)
         weight_force = total_mass * self.gravity
+        
+        # Net force
         net_force = buoyancy_force - weight_force
+        
+        # 5️⃣ Compute drag force
+        drag_force = self.drag_force(pressure)
+        # 6️⃣ Compute acceleration
+        # F = ma → a = F/m
+        acceleration = (net_force - drag_force) / total_mass
+        
+        # 7️⃣ Update vertical velocity using acceleration with velocity limiting
+        # self.vertical_velocity += acceleration * dt
+        # self.vertical_velocity = np.clip(self.vertical_velocity, -self.max_velocity, self.max_velocity)
 
-        # 3️⃣ Compute drag-limited terminal vertical velocity
-        drag_coefficient = 1.5  # stronger drag to stabilize vertical motion
-        cross_section = np.pi * (self.volume / np.pi) ** (2/3)
-        if net_force == 0:
-            self.vertical_velocity = 0.0
-        else:
-            v_terminal = np.sqrt(
-                abs(2 * net_force / (drag_coefficient * cross_section * rho_air))
-            )
-            self.vertical_velocity = np.sign(net_force) * v_terminal
 
-        # 4️⃣ When no action, dampen oscillation (±10m)
-        if abs(action) < 1e-3:
-            self.vertical_velocity *= 0.1
-        else:
-            # action>0: venting → decrease volume → decrease buoyancy → descend
-            if action > 0:
-                dV = self.max_vent_rate * action*10 * dt
-                self.volume = max(0.0, self.volume - dV)
-            # action<0: dropping sand → decrease weight → ascend
-            if action < 0:
-                d_sand = self.max_sand_rate * (-action) * dt
-                self.sand = max(0.0, self.sand - d_sand)
-
-        # 5️⃣ Update altitude
+        # temporarily use action as vertical velocity
+        self.vertical_velocity = action
         self.alt += self.vertical_velocity * dt / 1000
-
         # Clamp altitude to [5 km, 25 km]
         self.alt = np.clip(self.alt, 5.0, 25.0)
+        
+        # print(f"dVolume: {dVolume:.2f} m³, dSand: {dSand:.2f} kg")
+        self.pressure_pre = pressure
 
         # Debug output
-        print(f"Lat: {self.lat:.6f}km, Lon: {self.lon:.6f}km, Alt: {self.alt:.2f} km")
-        print(f"Volume: {self.volume:.2f} m³, Sand: {self.sand:.2f} kg, Vertical Vel.: {self.vertical_velocity:.2f} m/s")
+        # print(f"Lat: {self.lat:.6f}km, Lon: {self.lon:.6f}km, Alt: {self.alt:.2f} km")
+        # print(f"Volume: {self.volume:.2f} m³, Sand: {self.sand:.2f} kg, Vertical Vel.: {self.vertical_velocity:.2f} m/s")
+        # print(f"Pressure: {pressure:.2f} hPa, Air Density: {rho_air:.4f} kg/m³")
+        # print(f"Buoyancy: {buoyancy_force:.2f} N, Weight: {weight_force:.2f} N, Drag: {drag_force:.2f} N")
+        # print(f"Reynolds: {reynolds_number:.2f}, Drag Coef: {drag_coefficient:.4f}")
 
 
 class BalloonEnvironment:
     """Environment for balloon navigation"""
     def __init__(self):
         self.wind_field = WindField()
-        self.balloon = Balloon(initial_lat=0.0, initial_lon=0.0, initial_alt=10.0)
+        self.balloon = Balloon(initial_lat=0.0, initial_lon=0.0, initial_alt=8.0)
         self.dt = 60  # 1 minute time step (reduced from 1 hour)
         self.target_lat = 500  # km
         self.target_lon = -100  # km
@@ -200,24 +336,6 @@ class BalloonEnvironment:
         pressure = P0 * (1 - (L * h) / T0) ** (g / (R * L))
 
         return pressure
-    def altitude_to_pressure(self,altitude_m: float) -> float:
-        """
-        고도(m)를 입력받아, 대기압(hPa)을 반환하는 함수입니다.
-        국제표준대기모델(ISA)의 간단한 지수 감소식을 기반으로 합니다.
-        """
-        # 상수
-        P0 = 1013.25  # 해수면 기준 대기압 (hPa)
-        M = 0.029  # 공기 평균 분자량 (kg/mol)
-        g = 9.81  # 중력 가속도 (m/s^2)
-        R = 8.314  # 기체 상수 (J/(mol·K))
-        T = 220  # 평균 기온 (K, 10 km 부근)
-        # 지수 감소 인자
-        exponent = - (M * g * altitude_m) / (R * T)
-
-        # 압력 계산
-        pressure_hPa = P0 * np.exp(exponent)
-
-        return pressure_hPa
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         """
@@ -244,7 +362,7 @@ class BalloonEnvironment:
 
         # Get current pressure based on altitude
         # pressure = self._get_pressure(self.balloon.alt)
-        pressure = self.altitude_to_pressure(self.balloon.alt)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
 
         # Get wind at current position and time
         wind = self.wind_field.get_wind(
