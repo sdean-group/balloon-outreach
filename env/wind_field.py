@@ -1,7 +1,7 @@
+import xarray as xr
 import numpy as np
 from dataclasses import dataclass
 from scipy.interpolate import interpn
-
 
 @dataclass
 class WindVector:
@@ -93,3 +93,76 @@ class WindField:
                            method='linear', bounds_error=False, fill_value=None)
 
         return WindVector(float(u_interp), float(v_interp))
+    
+class ERAWindField:
+    """
+    Wind field backed by a real ERA5 xarray.Dataset.
+    You can query with lon, lat, pressure_level, and time.
+    """
+    def __init__(self, ds: xr.Dataset):
+        """
+        ds : xarray.Dataset
+            Must have variables 'u' and 'v' with dims
+            (valid_time, pressure_level, latitude, longitude).
+        """
+        self.ds = ds
+
+        # ensure the CF names match your file
+        # (you can print(ds) to check these coordinate names)
+        self.time_coord   = "valid_time"
+        self.plevel_coord = "pressure_level"
+        self.lat_coord    = "latitude"
+        self.lon_coord    = "longitude"
+
+    def get_wind(self,
+                 lon: float,
+                 lat: float,
+                 pressure: float,
+                 time: np.datetime64) -> WindVector:
+        """
+        Interpolate wind vector at a given (lon, lat, pressure, time).
+
+        Parameters
+        ----------
+        lon : float
+            Longitude in degrees (e.g. -120.5 or 350.0 depending on your grid).
+        lat : float
+            Latitude in degrees.
+        pressure : float
+            Pressure level in hPa (must be one of the levels in ds.pressure_level).
+        time : np.datetime64 or datetime
+            The desired timestamp (must lie within ds.valid_time).
+
+        Returns
+        -------
+        WindVector
+            u eastward and v northward components at that point.
+        """
+        # xarray will do a lazy linear interpolation in each dimension:
+        u_interp = self.ds["u"].interp(
+            {
+                self.lon_coord:        lon,
+                self.lat_coord:        lat,
+                self.plevel_coord:     pressure,
+                self.time_coord:       time
+            },
+            method="linear",
+            kwargs={"fill_value": "extrapolate"}
+        )
+
+        v_interp = self.ds["v"].interp(
+            {
+                self.lon_coord:        lon,
+                self.lat_coord:        lat,
+                self.plevel_coord:     pressure,
+                self.time_coord:       time
+            },
+            method="linear",
+            kwargs={"fill_value": "extrapolate"}
+        )
+
+        # .values.item() converts the 0-D array to a Python float
+        return WindVector(
+            u = float(u_interp.values.item()),
+            v = float(v_interp.values.item())
+        )
