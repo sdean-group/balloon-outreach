@@ -1,6 +1,9 @@
 import numpy as np
 
-## TODOs: wind field, haversine distance.
+## TODOs:
+## - Change transition model to include wind field (so lat, long, alt change properly.)
+## - Change heuristic to use Haversine distance.
+## - Change distance metric to Haversine distance? 
 
 def heuristic(state, target_lat, target_lon, target_alt):
     """
@@ -161,9 +164,20 @@ class TreeSearchAgent:
                         open_set.append(tuple(child_state))
         
 if __name__=="__main__":
-    # Example usage
+    # Example usage. Test case 1 (ascend.)
     agent = TreeSearchAgent(target_lat=50, target_lon=50, target_alt=10)
     initial_state = np.array([50, 50, 0])  # Starting at (lat=0, lon=0, alt=0)
     # lat and lon do not change in our transition model.
+    action_sequence = agent.select_action_sequence(initial_state)
+    print("Action sequence to target:", action_sequence)
+
+    # Test case 2 (descend.)
+    initial_state = np.array([50, 50, 20])  # Starting at (lat=0, lon=0, alt=20)
+    action_sequence = agent.select_action_sequence(initial_state)
+    print("Action sequence to target:", action_sequence)
+
+    # Test case 3 (stay.)
+    # (it won't explicitly use the 'stay' action because we do goal-checking prior to action application.)
+    initial_state = np.array([50, 50, 10])  # Starting at (lat=0, lon=0, alt=10)
     action_sequence = agent.select_action_sequence(initial_state)
     print("Action sequence to target:", action_sequence)
