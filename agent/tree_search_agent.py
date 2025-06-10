@@ -181,3 +181,7 @@ if __name__=="__main__":
     initial_state = np.array([50, 50, 10])  # Starting at (lat=0, lon=0, alt=10)
     action_sequence = agent.select_action_sequence(initial_state)
     print("Action sequence to target:", action_sequence)
+
+    # Action sequence to target: [((50, 50, 0), 'ascend'), ((50, 50, 1), 'ascend'), ((50, 50, 2), 'ascend'), ((50, 50, 3), 'ascend'), ((50, 50, 4), 'ascend'), ((50, 50, 5), 'ascend'), ((50, 50, 6), 'ascend'), ((50, 50, 7), 'ascend'), ((50, 50, 8), 'ascend'), ((50, 50, 9), 'ascend'), ((50, 50, 10), None)]
+    # Action sequence to target: [((50, 50, 20), 'descend'), ((50, 50, 19), 'descend'), ((50, 50, 18), 'descend'), ((50, 50, 17), 'descend'), ((50, 50, 16), 'descend'), ((50, 50, 15), 'descend'), ((50, 50, 14), 'descend'), ((50, 50, 13), 'descend'), ((50, 50, 12), 'descend'), ((50, 50, 11), 'descend'), ((50, 50, 10), None)]
+    # Action sequence to target: [((50, 50, 10), None)]
