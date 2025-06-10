@@ -2,10 +2,14 @@ import numpy as np
 from env.balloon_env import BalloonEnvironment
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
+from agent.PID_agent import AltitudePIDController
 import matplotlib.pyplot as plt
 
 def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 100) -> float:
     """Run one episode with the given agent"""
+    target_alt_km = 18.0
+    controller = AltitudePIDController(target_altitude=target_alt_km * 1000)  # convert km to m
+    dt = 300
     state = env.reset()
     total_reward = 0
     
@@ -15,8 +19,14 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     
     for step in range(max_steps):
         # Get action from agent
-        action = agent.select_action(state)
+        # action = agent.select_action(state)
         # print(action)
+        #PID
+        current_alt_m = state[2] * 1000  # Convert km to meters
+        control = controller.compute_action(current_alt=current_alt_m, dt=dt)
+        gas = max(control, 0.0)
+        ballast = max(-control, 0.0)
+        action = np.array([gas, ballast])
         # Take step
         state, reward, done, info = env.step(action)
         total_reward += reward

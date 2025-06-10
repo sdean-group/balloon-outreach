@@ -13,15 +13,9 @@ class GoalDirectedAgent:
         alt = state[2]
 
         # --- Altitude Control ---
-<<<<<<< HEAD
-        if alt < self.target_alt - 100:
-            return -1   # ascend
-        elif alt > self.target_alt + 100:
-=======
         if alt < self.target_alt - 1:
             return 1   # ascend
         elif alt > self.target_alt + 1:
->>>>>>> c844b2080f82975d501b204cb00f8eb737512751
             return 1  # descend
         else:
             return 0   # hold
