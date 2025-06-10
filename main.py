@@ -23,10 +23,8 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
         # print(action)
         #PID
         current_alt_m = state[2] * 1000  # Convert km to meters
-        control = controller.compute_action(current_alt=current_alt_m, dt=dt)
-        gas = max(control, 0.0)
-        ballast = max(-control, 0.0)
-        action = np.array([gas, ballast])
+        action = controller.compute_action(current_alt=current_alt_m, dt=dt)
+
         # Take step
         state, reward, done, info = env.step(action)
         total_reward += reward
