@@ -13,8 +13,9 @@ class GoalDirectedAgent:
         alt = state[2]
 
         # --- Altitude Control ---
-        error = self.target_alt - alt
-        if abs(error) < 10:
-            return 0  # hold
-        action = np.clip(error / 100.0, -1, 1)
-        return action
+        if alt < self.target_alt - 100:
+            return -1   # ascend
+        elif alt > self.target_alt + 100:
+            return 1  # descend
+        else:
+            return 0   # hold
