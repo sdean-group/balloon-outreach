@@ -1,22 +1,20 @@
 import numpy as np
-from env.balloon_env import BalloonEnvironment
+from env.balloon_env import Balloon,BalloonEnvironment
+import copy
 
 ## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
 ## TODOs:
-## - Change transition model to include wind field (so lat, long, alt change properly.)
 ## - Change heuristic to use Haversine distance.
 ## - Change distance metric to Haversine distance.
 
-def heuristic(state, target_lat, target_lon, target_alt):
+def euclidean_heuristic(state, target_lat, target_lon, target_alt):
     """
     A heuristic function for A* that estimates the cost to reach the target state.
     Uses Euclidean distance in 3D space.
-
-    TODO replace with Haversine distance?
     
     Args:
-        state: Current state as a numpy array [lat, lon, alt]
+        state: Current state as a numpy array [lat, lon, alt, t]
         target_lat: Target latitude
         target_lon: Target longitude
         target_alt: Target altitude
@@ -35,13 +33,14 @@ def distance(state1, state2):
     TODO replace with another distance metric?
     
     Args:
-        state1: First state as a numpy array [lat, lon, alt]
-        state2: Second state as a numpy array [lat, lon, alt]
+        state1: First state as a numpy array [lat, lon, alt, t]
+        state2: Second state as a numpy array [lat, lon, alt, t]
     
     Returns:
-        Euclidean distance between the two states.
+        Euclidean distance between [lat, long, alt]
     """
-    return np.linalg.norm(state1 - state2)
+    # Ignore time component for distance calculation.
+    return np.linalg.norm(state1[:3] - state2[:3])
 
 class TreeSearchAgent:
     """
@@ -52,66 +51,105 @@ class TreeSearchAgent:
     - Go to target location (specified by the balloon environment.)
     - Fly as far as possible [not yet implemented]
 
-    State: [lat, long, alt]
+    State: [lat, long, alt, t]
     Action: {stay, ascend, descend}
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None):
+    def __init__(self, balloon_env=None, heuristic='euclidean'):
         if balloon_env is not None:
+            self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
             self.target_lon = balloon_env.target_lon
             self.target_alt = balloon_env.target_alt
         else:
             print("No environment provided. Initialization failed.")
             return
+    
+        if heuristic == 'euclidean':
+            self.heuristic = euclidean_heuristic
+        elif heuristic == 'zero':
+            # Zero heuristic (Equivalent to Dijkstra's algorithm.)
+            self.heuristic = lambda state, target_lat, target_lon, target_alt: 0.0
+        else:
+            raise ValueError(f"Unknown heuristic: {heuristic}. Supported heuristics: 'euclidean', 'zero'.")
 
-    def is_goal_state(self, state: np.ndarray) -> bool:
+    def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
         Check if the current state is the goal state.
 
         Args:
-            state: Current state of the environment as a numpy array [lat, lon, alt]
+            state: Current state of the environment as a numpy array [lat, lon, alt, t]
         
         Returns:
             True if the current state matches the target state within a tolerance, False otherwise.
         """
-        return (np.isclose(state[0], self.target_lat, atol=1e-2) and
-                np.isclose(state[1], self.target_lon, atol=1e-2) and
-                np.isclose(state[2], self.target_alt, atol=1e-2))
+        return (np.isclose(state[0], self.target_lat, atol=atols[0]) and
+                np.isclose(state[1], self.target_lon, atol=atols[1]) and
+                np.isclose(state[2], self.target_alt, atol=atols[2]))
 
     def get_possible_actions(self, state: np.ndarray) -> list:
         """
         Get possible actions from the current state.
         
         Args:
-            state: Current state of the environment as a numpy array [lat, lon, alt]
+            state: Current state of the environment as a numpy array [lat, lon, alt, t]
         
         Returns:
             A list of possible actions. In this case, actions are represented as strings.
         """
         return ['stay', 'ascend', 'descend']
 
-    def apply_action(self, state: np.ndarray, action: str) -> np.ndarray:
+    def apply_action(self, state: np.ndarray, action: str, current_balloon : Balloon) -> np.ndarray:
         """
         Apply an action to the current state and return the new state.
-
-        # TODO replace with actual transition model.
         
         Args:
-            state: Current state of the environment as a numpy array [lat, lon, alt]
+            state: Current state of the environment as a numpy array [lat, lon, alt, t]
             action: Action to apply ('stay', 'ascend', 'descend')
         
         Returns:
-            New state after applying the action.
+            New state after applying the action [lat, lon, alt, t], and the updated Balloon instance.
         """
-        new_state = np.copy(state)
-        if action == 'ascend':
-            new_state[2] += 1
+        # NOTE: we should not be changing the state of the BalloonEnvironment directly,
+        # except through the Balloon instance.
+
+        # Unpack the current state.
+        lat, lon, alt, current_time = state
+
+        # Convert action string to numerical value.
+        if action == 'stay':
+            action_value = 0.0
+        elif action == 'ascend':
+            action_value = 1.0
         elif action == 'descend':
-            new_state[2] -= 1
-        # 'stay' action does not change the state
-        return new_state
+            action_value = -1.0
+
+        # Create a new balloon and push it into the current balloon environment.
+        balloon = copy.copy(current_balloon)  # Create a copy of the current balloon.
+        self.balloon_env.balloon = balloon  # Update the balloon in the environment.
+
+        # # Get current pressure based on altitude
+        pressure = self.balloon_env.balloon.altitude_to_pressure(self.balloon_env.balloon.alt)
+
+        # # Get wind at current position and time
+        wind = self.balloon_env.wind_field.get_wind(
+            self.balloon_env.balloon.lat,
+            self.balloon_env.balloon.lon,
+            pressure,
+            current_time
+        )
+        # Update balloon state.
+        # print("Starting balloon lat, lon, alt:", self.balloon_env.balloon.lat, self.balloon_env.balloon.lon, self.balloon_env.balloon.alt)
+        # print("Applying action:", action, "with value:", action_value)
+        self.balloon_env.balloon.step(wind, self.balloon_env.dt, action_value)
+
+        # Extract state from balloon, and also increment time.
+        new_state = np.array([self.balloon_env.balloon.lat,
+                              self.balloon_env.balloon.lon,
+                              self.balloon_env.balloon.alt,
+                              current_time + self.balloon_env.dt / 3600])
+        return new_state, self.balloon_env.balloon  # Return the new state and the updated balloon instance.
 
     def reconstruct_path(self, came_from: dict, current_state: tuple) -> np.ndarray:
         """
@@ -137,44 +175,91 @@ class TreeSearchAgent:
         Perform A* starting from an initial state to find a path to the target.
 
         Args
-            init_state: Initial state of the environment as a numpy array [lat, lon, alt]
+            init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
         
         Returns
             action_sequence: A sequence of (state, action) pairs leading to the target state.
         """
+        max_iterations = 1000  # Limit the number of iterations to prevent A* from running indefinitely.
+
         # Initialize the root node with the initial state
         open_set = [tuple(init_state)]  # Open set of nodes to explore
         action_sequence = []
         came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
         g_score = {tuple(init_state): 0}
-        f_score = {tuple(init_state): heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        # We also need a lookup table from each state to a Balloon instance.
+        state_to_balloon = {tuple(init_state): self.balloon_env.balloon}
+        it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
+            print(f"Current state: {current_state}, g_score: {g_score.get(current_state, np.inf)}, f_score: {f_score.get(current_state, np.inf)}")
 
             # Check if we reached the goal state
-            if self.is_goal_state(current_state):
+            if self.is_goal_state(current_state, atols=np.array([1e-2, 1e-2, 10])):    # TODO for testing, using a 1 km altitude tolerance.
                 action_sequence = self.reconstruct_path(came_from, current_state)
                 return action_sequence
 
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
-                child_state = self.apply_action(current_state, action)
+                child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
                 tentative_g_score = g_score[tuple(current_state)] + distance(current_state, child_state)
                 if tentative_g_score < g_score.get(tuple(child_state), np.inf):
                     # record the better path.
                     came_from[tuple(child_state)] = (current_state, action)
                     g_score[tuple(child_state)] = tentative_g_score
-                    f_score[tuple(child_state)] = tentative_g_score + heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                    f_score[tuple(child_state)] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                    # Update the balloon for this child state.
+                    state_to_balloon[tuple(child_state)] = child_state_balloon
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
-        
+
+            # Increment iteration count and check for max iterations.
+            it += 1
+            if it >= max_iterations:
+                print("Max iterations reached. Stopping search.")
+                break
+
+        # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
+        print("Plotting explored states...")
+        import matplotlib.pyplot as plt
+        latitudes = [state[0] for state in g_score.keys()]
+        longitudes = [state[1] for state in g_score.keys()]
+        fig, ax = plt.subplots()
+        ax.scatter(latitudes, longitudes, c='blue', label='Explored States')
+        ax.scatter(self.target_lat, self.target_lon, c='red', label='Target State', marker='x')
+        ax.set_xlabel('Latitude')
+        ax.set_ylabel('Longitude')
+        ax.set_title('Explored States in A* Search')
+        ax.legend()
+        plt.show()
+        plt.savefig('explored_states.png')
+
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
+
+    # Case 1 (initial state = target state.)
     env = BalloonEnvironment()
-    agent = TreeSearchAgent(balloon_env=env)
-    initial_state = np.array([env.target_lat, env.target_lon, 0])  # Starting at (lat=0, lon=0, alt=0)
+    agent = TreeSearchAgent(balloon_env=env, heuristic='zero')
+    initial_state = np.array([env.target_lat, env.target_lon, env.target_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    # Set the balloon's initial state.
+    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
+    action_sequence = agent.select_action_sequence(initial_state)
+    print(f"Action sequence to target: {action_sequence}")
+
+    # Case 2 (initial state = target state with some noise + hacking).
+    # Also, changed altitude tolerance to be very large (10 km) for testing.
+    noise_val = 0.02
+    # initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    # Set the balloon's initial state.
+    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
+    # HACK: change the target state to one that is currently feasible for A*.
+    agent.target_lat = 500.2
+    agent.target_lon = -100
+    agent.target_alt = 10.0
     action_sequence = agent.select_action_sequence(initial_state)
     print(f"Action sequence to target: {action_sequence}")
 
