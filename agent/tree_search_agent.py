@@ -1,4 +1,7 @@
 import numpy as np
+from env.balloon_env import BalloonEnvironment
+
+## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
 ## TODOs:
 ## - Change transition model to include wind field (so lat, long, alt change properly.)
@@ -164,24 +167,32 @@ class TreeSearchAgent:
                         open_set.append(tuple(child_state))
         
 if __name__=="__main__":
-    # Example usage. Test case 1 (ascend.)
-    agent = TreeSearchAgent(target_lat=50, target_lon=50, target_alt=10)
-    initial_state = np.array([50, 50, 0])  # Starting at (lat=0, lon=0, alt=0)
-    # lat and lon do not change in our transition model.
+    ## NEW TEST CASES (6/16/2025).
+    env = BalloonEnvironment()
+    agent = TreeSearchAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
+    initial_state = np.array([env.target_lat, env.target_lon, 0])  # Starting at (lat=0, lon=0, alt=0)
     action_sequence = agent.select_action_sequence(initial_state)
-    print("Action sequence to target:", action_sequence)
+    print(f"Action sequence to target: {action_sequence}")
 
-    # Test case 2 (descend.)
-    initial_state = np.array([50, 50, 20])  # Starting at (lat=0, lon=0, alt=20)
-    action_sequence = agent.select_action_sequence(initial_state)
-    print("Action sequence to target:", action_sequence)
+    ## OLD TEST CASES.
+    # # Example usage. Test case 1 (ascend.)
+    # agent = TreeSearchAgent(target_lat=50, target_lon=50, target_alt=10)
+    # initial_state = np.array([50, 50, 0])  # Starting at (lat=0, lon=0, alt=0)
+    # # lat and lon do not change in our transition model.
+    # action_sequence = agent.select_action_sequence(initial_state)
+    # print("Action sequence to target:", action_sequence)
 
-    # Test case 3 (stay.)
-    # (it won't explicitly use the 'stay' action because we do goal-checking prior to action application.)
-    initial_state = np.array([50, 50, 10])  # Starting at (lat=0, lon=0, alt=10)
-    action_sequence = agent.select_action_sequence(initial_state)
-    print("Action sequence to target:", action_sequence)
+    # # Test case 2 (descend.)
+    # initial_state = np.array([50, 50, 20])  # Starting at (lat=0, lon=0, alt=20)
+    # action_sequence = agent.select_action_sequence(initial_state)
+    # print("Action sequence to target:", action_sequence)
 
-    # Action sequence to target: [((50, 50, 0), 'ascend'), ((50, 50, 1), 'ascend'), ((50, 50, 2), 'ascend'), ((50, 50, 3), 'ascend'), ((50, 50, 4), 'ascend'), ((50, 50, 5), 'ascend'), ((50, 50, 6), 'ascend'), ((50, 50, 7), 'ascend'), ((50, 50, 8), 'ascend'), ((50, 50, 9), 'ascend'), ((50, 50, 10), None)]
-    # Action sequence to target: [((50, 50, 20), 'descend'), ((50, 50, 19), 'descend'), ((50, 50, 18), 'descend'), ((50, 50, 17), 'descend'), ((50, 50, 16), 'descend'), ((50, 50, 15), 'descend'), ((50, 50, 14), 'descend'), ((50, 50, 13), 'descend'), ((50, 50, 12), 'descend'), ((50, 50, 11), 'descend'), ((50, 50, 10), None)]
-    # Action sequence to target: [((50, 50, 10), None)]
+    # # Test case 3 (stay.)
+    # # (it won't explicitly use the 'stay' action because we do goal-checking prior to action application.)
+    # initial_state = np.array([50, 50, 10])  # Starting at (lat=0, lon=0, alt=10)
+    # action_sequence = agent.select_action_sequence(initial_state)
+    # print("Action sequence to target:", action_sequence)
+
+    # # Action sequence to target: [((50, 50, 0), 'ascend'), ((50, 50, 1), 'ascend'), ((50, 50, 2), 'ascend'), ((50, 50, 3), 'ascend'), ((50, 50, 4), 'ascend'), ((50, 50, 5), 'ascend'), ((50, 50, 6), 'ascend'), ((50, 50, 7), 'ascend'), ((50, 50, 8), 'ascend'), ((50, 50, 9), 'ascend'), ((50, 50, 10), None)]
+    # # Action sequence to target: [((50, 50, 20), 'descend'), ((50, 50, 19), 'descend'), ((50, 50, 18), 'descend'), ((50, 50, 17), 'descend'), ((50, 50, 16), 'descend'), ((50, 50, 15), 'descend'), ((50, 50, 14), 'descend'), ((50, 50, 13), 'descend'), ((50, 50, 12), 'descend'), ((50, 50, 11), 'descend'), ((50, 50, 10), None)]
+    # # Action sequence to target: [((50, 50, 10), None)]
