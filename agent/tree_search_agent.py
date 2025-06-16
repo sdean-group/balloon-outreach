@@ -8,20 +8,24 @@ import copy
 ## - Change heuristic to use Haversine distance.
 ## - Change distance metric to Haversine distance.
 
+# Set random seed to 0 for reproducibility.
+np.random.seed(0)
+
 # Copied over from env/balloon_env.py in branch v0_edit.
-def haversine_distance(state, target_lat, target_lon, target_alt):
+def haversine_distance(state_start, state_end):
     """Calculate great-circle distance between two (lat, lon) points in meters."""
     import math
     R = 6371e3  # Earth radius in meters
 
     # extract balloon state.
     # state is a numpy array [lat, lon, alt, t]
-    (lat, lon, alt, t) = state
+    (lat_start, lon_start) = state_start
+    (lat_end, lon_end) = state_end
 
-    phi1 = math.radians(lat)
-    phi2 = math.radians(target_lat)
-    delta_phi = math.radians(target_lat - lat)
-    delta_lambda = math.radians(target_lon - lon)
+    phi1 = math.radians(lat_start)
+    phi2 = math.radians(lat_end)
+    delta_phi = math.radians(lat_end - lat_start)
+    delta_lambda = math.radians(lon_end - lon_start)
 
     a = math.sin(delta_phi / 2) ** 2 + \
         math.cos(phi1) * math.cos(phi2) * \
@@ -30,6 +34,21 @@ def haversine_distance(state, target_lat, target_lon, target_alt):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
+
+def haversine_heuristic(state, target_lat, target_lon, target_alt):
+    """
+    A heuristic function for A* that estimates the cost to reach the target state.
+    Uses Haversine distance in 2D space (ignoring altitude).
+    
+    Args:
+        state: Current state as a numpy array [lat, lon, alt, t]
+        target_lat: Target latitude
+        target_lon: Target longitude
+    
+    Returns:
+        Estimated cost to reach the target state.
+    """
+    return haversine_distance(state[:2], np.array([target_lat, target_lon]))
 
 
 def euclidean_heuristic(state, target_lat, target_lon, target_alt):
@@ -50,7 +69,7 @@ def euclidean_heuristic(state, target_lat, target_lon, target_alt):
                    (state[1] - target_lon) ** 2 + 
                    (state[2] - target_alt) ** 2)
 
-def distance(state1, state2):
+def euclidean_distance(state1, state2):
     """
     Calculate the Euclidean distance between two states.
 
@@ -80,7 +99,7 @@ class TreeSearchAgent:
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None, heuristic='euclidean'):
+    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean'):
         if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -90,11 +109,20 @@ class TreeSearchAgent:
             print("No environment provided. Initialization failed.")
             return
     
+        if distance == 'euclidean':
+            self.distance = euclidean_distance
+        elif distance == 'haversine':
+            self.distance = haversine_distance
+        else:
+            raise ValueError(f"Unknown distance metric: {distance}. Supported metrics: 'euclidean', 'haversine'.")
+
         if heuristic == 'euclidean':
             self.heuristic = euclidean_heuristic
         elif heuristic == 'zero':
             # Zero heuristic (Equivalent to Dijkstra's algorithm.)
             self.heuristic = lambda state, target_lat, target_lon, target_alt: 0.0
+        elif heuristic == 'haversine':
+            self.heuristic = haversine_heuristic
         else:
             raise ValueError(f"Unknown heuristic: {heuristic}. Supported heuristics: 'euclidean', 'zero'.")
 
@@ -229,7 +257,7 @@ class TreeSearchAgent:
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
                 child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
-                tentative_g_score = g_score[tuple(current_state)] + distance(current_state, child_state)
+                tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
                 if tentative_g_score < g_score.get(tuple(child_state), np.inf):
                     # record the better path.
                     came_from[tuple(child_state)] = (current_state, action)
@@ -254,6 +282,8 @@ class TreeSearchAgent:
         fig, ax = plt.subplots()
         ax.scatter(latitudes, longitudes, c='blue', label='Explored States')
         ax.scatter(self.target_lat, self.target_lon, c='red', label='Target State', marker='x')
+        # show initial state too
+        ax.scatter(init_state[0], init_state[1], c='green', label='Initial State', marker='o')
         ax.set_xlabel('Latitude')
         ax.set_ylabel('Longitude')
         ax.set_title('Explored States in A* Search')
@@ -266,7 +296,7 @@ if __name__=="__main__":
 
     # Case 1 (initial state = target state.)
     env = BalloonEnvironment()
-    agent = TreeSearchAgent(balloon_env=env, heuristic='zero')
+    agent = TreeSearchAgent(balloon_env=env, distance='euclidean', heuristic='zero')
     initial_state = np.array([env.target_lat, env.target_lon, env.target_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     # Set the balloon's initial state.
     env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
@@ -281,8 +311,8 @@ if __name__=="__main__":
     # Set the balloon's initial state.
     env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
     # HACK: change the target state to one that is currently feasible for A*.
-    agent.target_lat = 500.2
-    agent.target_lon = -100
+    agent.target_lat = 499.6
+    agent.target_lon = -99.86
     agent.target_alt = 10.0
     action_sequence = agent.select_action_sequence(initial_state)
     print(f"Action sequence to target: {action_sequence}")
