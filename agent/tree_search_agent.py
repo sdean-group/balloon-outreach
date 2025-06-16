@@ -8,6 +8,30 @@ import copy
 ## - Change heuristic to use Haversine distance.
 ## - Change distance metric to Haversine distance.
 
+# Copied over from env/balloon_env.py in branch v0_edit.
+def haversine_distance(state, target_lat, target_lon, target_alt):
+    """Calculate great-circle distance between two (lat, lon) points in meters."""
+    import math
+    R = 6371e3  # Earth radius in meters
+
+    # extract balloon state.
+    # state is a numpy array [lat, lon, alt, t]
+    (lat, lon, alt, t) = state
+
+    phi1 = math.radians(lat)
+    phi2 = math.radians(target_lat)
+    delta_phi = math.radians(target_lat - lat)
+    delta_lambda = math.radians(target_lon - lon)
+
+    a = math.sin(delta_phi / 2) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2) ** 2
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
+
+
 def euclidean_heuristic(state, target_lat, target_lon, target_alt):
     """
     A heuristic function for A* that estimates the cost to reach the target state.
