@@ -19,8 +19,8 @@ def haversine_distance(state_start, state_end):
 
     # extract balloon state.
     # state is a numpy array [lat, lon, alt, t]
-    (lat_start, lon_start) = state_start
-    (lat_end, lon_end) = state_end
+    (lat_start, lon_start) = state_start[:2]
+    (lat_end, lon_end) = state_end[:2]
 
     phi1 = math.radians(lat_start)
     phi2 = math.radians(lat_end)
@@ -48,7 +48,7 @@ def haversine_heuristic(state, target_lat, target_lon, target_alt):
     Returns:
         Estimated cost to reach the target state.
     """
-    return haversine_distance(state[:2], np.array([target_lat, target_lon]))
+    return haversine_distance(state, np.array([target_lat, target_lon, target_alt, -1])) # -1 for time, since we ignore it in the heuristic.
 
 
 def euclidean_heuristic(state, target_lat, target_lon, target_alt):
@@ -247,7 +247,7 @@ class TreeSearchAgent:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
-            print(f"Current state: {current_state}, g_score: {g_score.get(current_state, np.inf)}, f_score: {f_score.get(current_state, np.inf)}")
+            # print(f"Current state: {current_state}, g_score: {g_score.get(current_state, np.inf)}, f_score: {f_score.get(current_state, np.inf)}")
 
             # Check if we reached the goal state
             if self.is_goal_state(current_state, atols=np.array([1e-2, 1e-2, 10])):    # TODO for testing, using a 1 km altitude tolerance.
@@ -307,6 +307,20 @@ if __name__=="__main__":
     # Also, changed altitude tolerance to be very large (10 km) for testing.
     noise_val = 0.02
     # initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    # Set the balloon's initial state.
+    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
+    # HACK: change the target state to one that is currently feasible for A*.
+    agent.target_lat = 499.6
+    agent.target_lon = -99.86
+    agent.target_alt = 10.0
+    action_sequence = agent.select_action_sequence(initial_state)
+    print(f"Action sequence to target: {action_sequence}")
+
+    # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    # Currently not working...
+    env = BalloonEnvironment()
+    agent = TreeSearchAgent(balloon_env=env, distance='haversine', heuristic='zero')
     initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     # Set the balloon's initial state.
     env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
