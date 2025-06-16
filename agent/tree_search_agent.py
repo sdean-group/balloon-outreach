@@ -6,7 +6,7 @@ from env.balloon_env import BalloonEnvironment
 ## TODOs:
 ## - Change transition model to include wind field (so lat, long, alt change properly.)
 ## - Change heuristic to use Haversine distance.
-## - Change distance metric to Haversine distance? 
+## - Change distance metric to Haversine distance.
 
 def heuristic(state, target_lat, target_lon, target_alt):
     """
@@ -49,18 +49,22 @@ class TreeSearchAgent:
     to find the optimal path from current state to goal state.
 
     Tasks:
-    - Go to target location
-    - Fly as far as possible [not yet incorporated]
+    - Go to target location (specified by the balloon environment.)
+    - Fly as far as possible [not yet implemented]
 
     State: [lat, long, alt]
     Action: {stay, ascend, descend}
 
     Algorithm: A*
     """
-    def __init__(self, target_lat=100, target_lon=100, target_alt=12):
-        self.target_lat = target_lat
-        self.target_lon = target_lon
-        self.target_alt = target_alt
+    def __init__(self, balloon_env=None):
+        if balloon_env is not None:
+            self.target_lat = balloon_env.target_lat
+            self.target_lon = balloon_env.target_lon
+            self.target_alt = balloon_env.target_alt
+        else:
+            print("No environment provided. Initialization failed.")
+            return
 
     def is_goal_state(self, state: np.ndarray) -> bool:
         """
@@ -169,7 +173,7 @@ class TreeSearchAgent:
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
     env = BalloonEnvironment()
-    agent = TreeSearchAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
+    agent = TreeSearchAgent(balloon_env=env)
     initial_state = np.array([env.target_lat, env.target_lon, 0])  # Starting at (lat=0, lon=0, alt=0)
     action_sequence = agent.select_action_sequence(initial_state)
     print(f"Action sequence to target: {action_sequence}")
