@@ -250,7 +250,7 @@ class TreeSearchAgent:
             # print(f"Current state: {current_state}, g_score: {g_score.get(current_state, np.inf)}, f_score: {f_score.get(current_state, np.inf)}")
 
             # Check if we reached the goal state
-            if self.is_goal_state(current_state, atols=np.array([1e-2, 1e-2, 10])):    # TODO for testing, using a 1 km altitude tolerance.
+            if self.is_goal_state(current_state, atols=np.array([1e-2, 1e-2, 0.02])):    # TODO for testing, using a 0.02 km altitude tolerance.
                 action_sequence = self.reconstruct_path(came_from, current_state)
                 return action_sequence
 
@@ -313,7 +313,7 @@ if __name__=="__main__":
     # HACK: change the target state to one that is currently feasible for A*.
     agent.target_lat = 499.6
     agent.target_lon = -99.86
-    agent.target_alt = 10.0
+    agent.target_alt = 12.0
     action_sequence = agent.select_action_sequence(initial_state)
     print(f"Action sequence to target: {action_sequence}")
 
