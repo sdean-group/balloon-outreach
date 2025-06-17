@@ -26,6 +26,5 @@
 
 ![Fig12](./figs/wind_fig12.png)
 
-## How does the dataset look like?
-- You can check the file ```open_ERA5_data.ipynb```
-
+## How can we use ERA5 dataset?
+- You can check the file ```ERA5_demo.ipynb```
