@@ -135,8 +135,8 @@ class Balloon:
         self.gravity = 9.81  # m/s²
         self.vertical_velocity = 0.0
         # Control rates
-        self.max_vent_rate = 0.1  # m³/s
-        self.max_sand_rate = 0.001  # kg/s - 1g/s right now
+        self.max_vent_rate = 0.05  # m³/s
+        self.max_sand_rate = 0.002  # kg/s - 1g/s right now
 
     def get_air_density(self, altitude: float) -> float:
         """Exponential decay model for air density with altitude."""
@@ -151,6 +151,9 @@ class Balloon:
         # 1️⃣ Horizontal motion (latitude & longitude update)
         self.lat += wind.u * dt / (self.EARTH_RADIUS * self.DEG_TO_RAD)
         self.lon += wind.v * dt / (self.EARTH_RADIUS * self.DEG_TO_RAD)
+
+        self.volume = np.clip(self.volume, 0.0, self.max_volume)
+        self.sand = np.clip(self.sand, 0.0, self.max_sand)
 
         # 2️⃣ Forces
         rho_air = self.get_air_density(self.alt)

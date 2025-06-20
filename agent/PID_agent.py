@@ -1,7 +1,8 @@
 import numpy as np 
-from env.ERA_wind_field import WindField
+# from env.ERA_wind_field import WindField
 from env.balloon_env import BalloonEnvironment
-from tree_search_agent import TreeSearchAgent
+# from tree_search_agent import TreeSearchAgent
+import matplotlib.pyplot as plt
 
 # class PIDAgent:
 #     def __init__(self, target_altitude_km):
@@ -86,21 +87,67 @@ class PIDTrackingAgent:
         wind = self.wind_field.get_wind(lat, lon, pressure, t)
 
         # PID control (altitudes in meters)
-        action = self.pid.compute_action(current_alt=alt*1000, target_alt=target_alt*1000, dt=self.dt)
+        action = self.pid.compute_action(current_alt=alt, target_alt=target_alt, dt=self.dt)
         # Apply wind and action to update balloon state (example, you may need to adapt this)
-        self.env.step(wind, self.dt, action)
+        self.env.step(action)
 
         # Return action for logging or further processing
         return action
+    
+def generate_synthetic_trajectory(num_points=100, dt=60):
+    lats = np.zeros(num_points)  # keep lat constant
+    lons = np.zeros(num_points)  # keep lon constant
+    # Sine wave for altitude: mean 10 km, amplitude 2 km, period = full trajectory
+    alts = 10000 + 2000 * np.sin(np.linspace(0, 2 * np.pi, num_points))  # 8000 to 12000 meters
+    times = np.arange(0, num_points * dt, dt) / 3600  # hours
+    plan = [(np.array([lat, lon, alt, t]), None) for lat, lon, alt, t in zip(lats, lons, alts, times)]
+    return plan
+
+# Dummy wind field class for testing
+class DummyWindField:
+    def get_wind(self, lat, lon, pressure, t):
+        # Return zero wind for simplicity, or you can add a synthetic wind pattern here
+        return np.array([0.0, 0.0])
 
 # Example usage:
 if __name__ == "__main__":
     # plan = [(state1, action1), (state2, action2), ...]  # from tree search
-    plan = TreeSearchAgent.select_action_sequence()  # Example placeholder, replace with actual plan
+    # plan = TreeSearchAgent.select_action_sequence()  # Example placeholder, replace with actual plan
+    dt = 60  # seconds
+    plan = generate_synthetic_trajectory(num_points=100, dt=dt)
+    print([state[2] for state, _ in plan])
+    initial_state = plan[0][0].copy()
+
     env = BalloonEnvironment()
-    era_windfield = WindField
-    pid_agent = PIDTrackingAgent(env, plan, era_windfield,Kp=0.01, dt=60)
-    state = np.array([lat, lon, alt, t])
-    for t in np.arange(start_time, end_time, pid_agent.dt/3600):
+    era_windfield = DummyWindField()  # Placeholder for ERA wind field, replace with actual wind field data
+    env.balloon.lat = initial_state[0]  # Set initial lat, lon, alt
+    env.balloon.lon = initial_state[1]
+    env.balloon.alt = initial_state[2]
+    pid_agent = PIDTrackingAgent(env, plan, era_windfield,Kp=0.005,Ki=0.0,Kd=0.00001, dt=dt)
+    state = initial_state.copy()
+    actual_alts = []
+    target_alts = []
+    times = []
+
+    for i, (target_state, _) in enumerate(plan):
+        t = target_state[3]
         action = pid_agent.step(state, t)
-    # update state from env.balloon after step, or keep track externally
+        # Update state from env.balloon after step
+        state[0] = env.balloon.lat
+        state[1] = env.balloon.lon
+        state[2] = env.balloon.alt
+        actual_alts.append(state[2]/1000)  # Convert to km
+        target_alts.append(target_state[2]/1000)
+        times.append(t)
+        print(f"t={t:.2f}h, target={target_state[2]/1000:.2f}km, actual={state[2]/1000:.2f}km, action={action:.4f}")
+    # print(target_alts[:10]) 
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, target_alts, label='Target Altitude (km)', linestyle='--')
+    plt.plot(times, actual_alts, label='PID Altitude (km)')
+    plt.xlabel('Time (hours)')
+    plt.ylabel('Altitude (km)')
+    plt.title('PID Tracking of Synthetic Altitude Trajectory (BalloonEnvironment)')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    input("Press Enter to exit and close the plot...")
