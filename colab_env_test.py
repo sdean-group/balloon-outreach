@@ -1,3 +1,6 @@
+## Should produce an identical sequence to `test_up_sequence_from_default` (in `test_action_sequence')
+
+
 from env.balloon_env import BalloonEnvironment
 import numpy as np
 np.random.seed(0)  # Set random seed to 0 for reproducibility.
