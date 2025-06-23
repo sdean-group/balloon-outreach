@@ -2,7 +2,7 @@
 ## Uses transition model embedded in TreeSearchAgent.
 
 from agent.tree_search_agent import TreeSearchAgent
-from env.balloon_env import BalloonEnvironment
+from env.balloon_env import Balloon, BalloonEnvironment
 import matplotlib.pyplot as plt
 import numpy as np
 # Set random seed to 0 for reproducibility.
@@ -49,15 +49,17 @@ def run_action_sequence(initial_state : np.ndarray, action_sequence : list, plot
     env = BalloonEnvironment()
     agent = TreeSearchAgent(balloon_env=env, distance='euclidean', heuristic='zero')
     # Set the balloon's initial state.
-    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
+    env.balloon = Balloon(initial_lat=initial_state[0],
+                          initial_lon=initial_state[1],
+                          initial_alt=initial_state[2],)
 
     # Execute the action sequence
     current_state = initial_state
-    current_balloon = env.balloon
+    current_balloon_env = env
     state_sequence = [current_state]
     print(f"Initial State [lat/long/alt/t]: {current_state}")
     for action in action_sequence:
-        current_state, current_balloon = agent.apply_action(current_state, action, current_balloon)
+        current_state, current_balloon_env = agent.apply_action(action, current_balloon_env)
         state_sequence.append(current_state)
         print(f"Action: {action}, Current State [lat/long/alt/t]: {current_state}")
 

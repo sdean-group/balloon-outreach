@@ -101,7 +101,7 @@ class TreeSearchAgent:
     Algorithm: A*
     """
     def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean'):
-        if balloon_env is not None:
+        if balloon_env is not None:                     # NOTE: this represents the balloon environment for the root node only.
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
             self.target_lon = balloon_env.target_lon
@@ -153,23 +153,17 @@ class TreeSearchAgent:
         """
         return ['stay', 'ascend', 'descend']
 
-    def apply_action(self, state: np.ndarray, action: str, current_balloon : Balloon) -> np.ndarray:
+    def apply_action(self, action: str, current_balloonenv : BalloonEnvironment) -> np.ndarray:
         """
         Apply an action to the current state and return the new state (adapted from BalloonEnvironment.step())
         
         Args:
-            state: Current state of the environment as a numpy array [lat, lon, alt, t]
             action: Action to apply ('stay', 'ascend', 'descend')
+            current_balloonenv: Current BalloonEnvironment instance to apply the action on (contains the balloon state).
         
         Returns:
-            New state after applying the action [lat, lon, alt, t], and the updated Balloon instance.
+            New state after applying the action [lat, lon, alt, t], and the updated BalloonEnvironment instance.
         """
-        # NOTE: we should not be changing the state of the BalloonEnvironment directly,
-        # except through the Balloon instance.
-
-        # Unpack the current state.
-        lat, lon, alt, current_time = state
-
         # Convert action string to numerical value.
         if action == 'stay':
             action_value = 0.0
@@ -178,32 +172,17 @@ class TreeSearchAgent:
         elif action == 'descend':
             action_value = -1.0
 
-        # Create a new balloon and push it into the current balloon environment.
-        balloon = copy.copy(current_balloon)  # Create a copy of the current balloon.
-        self.balloon_env.balloon = balloon  # Update the balloon in the environment.
+        # Create deep-copy of the current balloon environment.
+        balloon_env = copy.deepcopy(current_balloonenv)
+        
+        # Step the balloon environment with the action.
+        state, _, _, _ = balloon_env.step(action_value)
+        
+        # Extract lat/long/alt/t from the new state, and return the updated balloon environment.
+        new_state = np.array([state[0], state[1], state[2], state[6]])
 
-        # # Get current pressure based on altitude
-        pressure = self.balloon_env.balloon.altitude_to_pressure(self.balloon_env.balloon.alt)
+        return new_state, balloon_env
 
-        # # Get wind at current position and time
-        wind = self.balloon_env.wind_field.get_wind(
-            self.balloon_env.balloon.lat,
-            self.balloon_env.balloon.lon,
-            pressure,
-            current_time
-        )
-        # Update balloon state.
-        # print("Starting balloon lat, lon, alt:", self.balloon_env.balloon.lat, self.balloon_env.balloon.lon, self.balloon_env.balloon.alt)
-        # print("Applying action:", action, "with value:", action_value)
-        print(f"Wind: {wind}, dt: {self.balloon_env.dt}, Action value: {action_value}")
-        self.balloon_env.balloon.step(wind, self.balloon_env.dt, action_value)
-
-        # Extract state from balloon, and also increment time.
-        new_state = np.array([self.balloon_env.balloon.lat,
-                              self.balloon_env.balloon.lon,
-                              self.balloon_env.balloon.alt,
-                              current_time + self.balloon_env.dt / 3600])
-        return new_state, self.balloon_env.balloon  # Return the new state and the updated balloon instance.
 
     def reconstruct_path(self, came_from: dict, current_state: tuple) -> np.ndarray:
         """
@@ -276,7 +255,7 @@ class TreeSearchAgent:
         g_score = {tuple(init_state): 0}
         f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
         # We also need a lookup table from each state to a Balloon instance.
-        state_to_balloon = {tuple(init_state): self.balloon_env.balloon}
+        state_to_balloon_env = {tuple(init_state): self.balloon_env}
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
@@ -293,7 +272,7 @@ class TreeSearchAgent:
 
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
-                child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
+                child_state, child_state_balloon_env = self.apply_action(action, state_to_balloon_env[current_state])
                 tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
                 if tentative_g_score < g_score.get(tuple(child_state), np.inf):
                     # record the better path.
@@ -301,7 +280,7 @@ class TreeSearchAgent:
                     g_score[tuple(child_state)] = tentative_g_score
                     f_score[tuple(child_state)] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
                     # Update the balloon for this child state.
-                    state_to_balloon[tuple(child_state)] = child_state_balloon
+                    state_to_balloon_env[tuple(child_state)] = child_state_balloon_env
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
 
