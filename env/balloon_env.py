@@ -129,7 +129,7 @@ class Balloon:
         # Add integral control to eliminate steady state error
         vel_error_integral = 0.0
         Ki_vel = 0.01   # Integral gain for steady state error elimination
-        print(f"delta_t:{delta_t}, dt:{dt}")
+        # print(f"delta_t:{delta_t}, dt:{dt}")
         for i in range(0, dt, delta_t):
             # Smooth velocity target (linear interpolation)
             t_progress = i / dt
@@ -308,7 +308,7 @@ class Balloon:
         self.lon += wind.v * dt / 1000
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
         dVolume, dSand = self.internal_controller(self.vertical_velocity, action, dt, pressure)
-        print(f"currnet velocity: {self.vertical_velocity:.2f} m/s | desired velocity: {action:.2f} m/s\n--------------------------------")
+        # print(f"currnet velocity: {self.vertical_velocity:.2f} m/s | desired velocity: {action:.2f} m/s\n--------------------------------")
 
 
 class BalloonEnvironment:
@@ -433,6 +433,7 @@ class BalloonEnvironment:
             self.current_time
         )
         # Update balloon state
+        print(f"Wind: {wind}, dt: {self.dt}, Action value: {action_value}")
         self.balloon.step(wind, self.dt, action_value)
 
         # Update time
