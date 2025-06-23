@@ -68,7 +68,7 @@ class WindField:
         lon: float,
         lat: float,
         pressure: float,
-        elapsed_time: dt.timedelta
+        elapsed_time: float
     ) -> WindVector:
         """
         Interpolate and return the noisy wind vector at a given location and elapsed time.
@@ -91,7 +91,8 @@ class WindField:
             with added Simplex noise.
         """
         # Compute actual timestamp for interpolation
-        current_time = self.start_time + elapsed_time
+        elapsed_time_dt = dt.timedelta(seconds=elapsed_time*3600)
+        current_time = self.start_time + elapsed_time_dt
 
         # Linear interpolation from ERA5
         u_interp = self.ds["u"].interp(
@@ -125,7 +126,7 @@ class WindField:
             x_dist,
             y_dist,
             pressure,
-            elapsed_time
+            elapsed_time_dt
         )
         # Extract m/s from Velocity objects
         u_noise = noise.u.meters_per_second
