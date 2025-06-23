@@ -32,6 +32,7 @@ def plot_state_sequence(state_sequence : np.ndarray, plot_prefix : str):
     ax.legend()
     plt.show()
     plt.savefig(f'{plot_prefix}.png')
+    plt.close()
 
 
 def run_action_sequence(initial_state : np.ndarray, action_sequence : list, plot_prefix: str):
@@ -103,12 +104,26 @@ def test_action_sequence():
     # print("Testing action sequence with initial state:", initial_state)
     # run_action_sequence(np.array(initial_state), action_sequence, plot_prefix="test_down_sequence")
 
-    # Test sequence of 5 'ascend' actions, starting from [0,0,10,0] initial state (same as env default).
+    # Test sequence of 5 'ascend' actions, starting from [0,0,10,0] initial state (same as env default in colab_env_test.py).
     print("-------------------------")
     initial_state = [0, 0, 10, 0]
     action_sequence = ['ascend'] * 5  # Repeat 'up' action 5 times
     print("Testing action sequence with initial state:", initial_state)
     run_action_sequence(np.array(initial_state), action_sequence, plot_prefix="test_up_sequence_from_default")
+
+    # Test sequence of 5 'descend' actions, starting from [0,0,10,0] initial state (same as env default in colab_env_test.py).
+    print("-------------------------")
+    initial_state = [0, 0, 10, 0]
+    action_sequence = ['descend'] * 5  # Repeat 'down' action 5 times
+    print("Testing action sequence with initial state:", initial_state)
+    run_action_sequence(np.array(initial_state), action_sequence, plot_prefix="test_down_sequence_from_default")
+
+    # Test sequence of 5 'stay' actions, starting from [0,0,10,0] initial state (same as env default in colab_env_test.py).
+    print("-------------------------")
+    initial_state = [0, 0, 10, 0]
+    action_sequence = ['stay'] * 5  # Repeat 'stay' action 5 times
+    print("Testing action sequence with initial state:", initial_state)
+    run_action_sequence(np.array(initial_state), action_sequence, plot_prefix="test_stay_sequence_from_default")
 
 if __name__ == "__main__":
     test_action_sequence()
