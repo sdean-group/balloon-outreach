@@ -433,7 +433,7 @@ class BalloonEnvironment:
             self.current_time
         )
         # Update balloon state
-        print(f"Wind: {wind}, dt: {self.dt}, Action value: {action_value}")
+        # print(f"Wind: {wind}, dt: {self.dt}, Action value: {action_value}")
         self.balloon.step(wind, self.dt, action_value)
 
         # Update time
