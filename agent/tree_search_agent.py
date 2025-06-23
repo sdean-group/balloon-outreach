@@ -203,7 +203,7 @@ class TreeSearchAgent:
             working_state, working_action = came_from[working_state] if working_state in came_from else (None, None)
         return path[::-1]
 
-    def plot_astar_tree(self, init_state: np.ndarray, g_score: dict, lat_long_atol: float = 1e-2):
+    def plot_astar_tree(self, init_state: np.ndarray, g_score: dict, lat_long_atol: float = 1e-2, plot_suffix: str = ""):
         """
         Plot the A* search tree.
 
@@ -231,9 +231,9 @@ class TreeSearchAgent:
         ax.set_title('Explored States in A* Search')
         ax.legend()
         plt.show()
-        plt.savefig('explored_states.png')
+        plt.savefig(f'explored_states_{plot_suffix}.png')
 
-    def select_action_sequence(self, init_state: np.ndarray) -> np.ndarray:
+    def select_action_sequence(self, init_state: np.ndarray, plot_suffix : str = '') -> np.ndarray:
         """
         Perform A* starting from an initial state to find a path to the target.
 
@@ -267,7 +267,7 @@ class TreeSearchAgent:
             # Check if we reached the goal state
             if self.is_goal_state(current_state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol])):
                 action_sequence = self.reconstruct_path(came_from, current_state)
-                self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol)
+                self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
                 return action_sequence
 
             # Generate children nodes for possible actions
@@ -292,11 +292,11 @@ class TreeSearchAgent:
 
         # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
         print("A* failed. Plotting explored states...")
-        self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol)
+        self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
 
 
 def run_astar(initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
-              distance='euclidean', heuristic='euclidean'):
+              distance='euclidean', heuristic='euclidean', plot_suffix: str = ""):
     """
     Run A* search from an initial state to a target state.
     """
@@ -310,7 +310,7 @@ def run_astar(initial_lat: float, initial_long: float, initial_alt: float, targe
     agent.target_lat = target_lat
     agent.target_lon = target_lon
     agent.target_alt = target_alt
-    action_sequence = agent.select_action_sequence(initial_state)
+    action_sequence = agent.select_action_sequence(initial_state, plot_suffix=plot_suffix)
     print(f"Action sequence to target: {action_sequence}")
 
 
@@ -319,21 +319,24 @@ def test1():
     print("------ Case 1: Initial state = target state ---")
     run_astar(initial_lat=0, initial_long=0, initial_alt=10.0,
               target_lat=0, target_lon=0, target_alt=10.0,
-              distance='euclidean', heuristic='zero')
+              distance='euclidean', heuristic='zero',
+              plot_suffix="test1")
 
 def test2():
     # Case 2 (initial state = target state with some drift).
     print("------ Case 2: Initial state = target state with noise ---")
     run_astar(initial_lat=0, initial_long=0, initial_alt=10,
               target_lat=0.16, target_lon=0.16, target_alt=10,
-              distance='euclidean', heuristic='euclidean')
+              distance='euclidean', heuristic='euclidean',
+              plot_suffix="test2")
 
 def test3():
-    # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    # Case 3 [test Haversine distance metric and heuristic, otherwise same as Case 2.]
     print("------ Case 3: Initial state = target state with noise, using Haversine distance ---")
     run_astar(initial_lat=0, initial_long=0, initial_alt=10,
               target_lat=0.16, target_lon=0.16, target_alt=10,
-              distance='haversine', heuristic='haversine')
+              distance='haversine', heuristic='haversine',
+              plot_suffix="test3")
 
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
