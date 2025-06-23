@@ -5,10 +5,6 @@ import matplotlib.pyplot as plt
 
 ## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
-## TODOs:
-## - Change heuristic to use Haversine distance.
-## - Change distance metric to Haversine distance.
-
 # Set random seed to 0 for reproducibility.
 np.random.seed(0)
 
@@ -353,3 +349,11 @@ if __name__=="__main__":
 
     # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
     test3()
+
+    # Expected outputs from Cases 1-3:
+    # ------ Case 1: Initial state = target state ---
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), None)]
+    # ------ Case 2: Initial state = target state with noise ---
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'stay'), ((np.float64(0.03194087297407955), np.float64(0.028071626935738263), np.float64(10.000054055658351), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0637754093993097), np.float64(0.05741264959936474), np.float64(9.99982956253404), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.09550437678071091), np.float64(0.08802261846718662), np.float64(9.99979730199271), np.float64(0.05)), 'stay'), ((np.float64(0.12712857331563762), np.float64(0.11990106212115517), np.float64(9.999804818339697), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.1586488301314381), np.float64(0.15304748657786632), np.float64(9.999808634033268), np.float64(0.08333333333333333)), None)]
+    # ------ Case 3: Initial state = target state with noise, using Haversine distance ---
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'ascend'), ((np.float64(0.03074732806206913), np.float64(0.027918130248106156), np.float64(10.028240761498703), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0615009936937044), np.float64(0.05717205027069738), np.float64(10.037375501346354), np.float64(0.03333333333333333)), 'ascend'), ((np.float64(0.09226261009070276), np.float64(0.08776143920750092), np.float64(10.069463552260146), np.float64(0.05)), 'descend'), ((np.float64(0.12303399984336755), np.float64(0.11968626113176586), np.float64(10.036209859091501), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.15381691689843763), np.float64(0.15294577331388504), np.float64(10.015281067642064), np.float64(0.08333333333333333)), None)]
