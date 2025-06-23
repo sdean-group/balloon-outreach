@@ -1,5 +1,6 @@
 import numpy as np
 from env.balloon_env import Balloon,BalloonEnvironment
+from env.balloon_ERA_env import BalloonERAEnvironment
 import copy
 import matplotlib.pyplot as plt
 
@@ -283,6 +284,7 @@ class TreeSearchAgent:
 
             # Increment iteration count and check for max iterations.
             it += 1
+            print(f"Iteration {it}/{max_iterations}")
             if it >= max_iterations:
                 print("Max iterations reached. Stopping search.")
                 break
@@ -292,14 +294,13 @@ class TreeSearchAgent:
         self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
 
 
-def run_astar(initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
+def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
               distance='euclidean', heuristic='euclidean', plot_suffix: str = ""):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
-    env = BalloonEnvironment()
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
@@ -317,7 +318,8 @@ def run_astar(initial_lat: float, initial_long: float, initial_alt: float, targe
 def test1():
     # Case 1 (initial state = target state.)
     print("------ Case 1: Initial state = target state ---")
-    run_astar(initial_lat=0, initial_long=0, initial_alt=10.0,
+    env = BalloonEnvironment()
+    run_astar(env, initial_lat=0, initial_long=0, initial_alt=10.0,
               target_lat=0, target_lon=0, target_alt=10.0,
               distance='euclidean', heuristic='zero',
               plot_suffix="test1")
@@ -325,7 +327,8 @@ def test1():
 def test2():
     # Case 2 (initial state = target state with some drift).
     print("------ Case 2: Initial state = target state with noise ---")
-    run_astar(initial_lat=0, initial_long=0, initial_alt=10,
+    env = BalloonEnvironment()
+    run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
               target_lat=0.16, target_lon=0.16, target_alt=10,
               distance='euclidean', heuristic='euclidean',
               plot_suffix="test2")
@@ -333,22 +336,47 @@ def test2():
 def test3():
     # Case 3 [test Haversine distance metric and heuristic, otherwise same as Case 2.]
     print("------ Case 3: Initial state = target state with noise, using Haversine distance ---")
-    run_astar(initial_lat=0, initial_long=0, initial_alt=10,
+    env = BalloonEnvironment()
+    run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
               target_lat=0.16, target_lon=0.16, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test3")
+    
+def test_era():
+    # Case 4: Test A* with BalloonERAEnvironment.
+    print("------ Case 4: Test A* with BalloonERAEnvironment ---")
+
+    # BalloonERAEnvironment initialization (see main_ERA.py)
+    import xarray as xr
+    import datetime as dt
+    # 1. load your ERA5 file
+    ds = xr.open_dataset("era5_data.nc", engine="netcdf4")
+    # 2. pick a reference start_time (should match your dataset’s first valid_time)
+    start_time = dt.datetime(2024, 7, 1, 0, 0)
+    # Create environment and agent
+    env = BalloonERAEnvironment(ds=ds, start_time=start_time)
+
+    # Run same test case as case 3.
+    run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
+              target_lat=0.18, target_lon=2.4, target_alt=10,
+              distance='haversine', heuristic='haversine',
+              plot_suffix="test_era")
+
 
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
 
     # Case 1 (initial state = target state.)
-    test1()
+    # test1()
 
-    # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
-    test2()
+    # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
+    # test2()
 
-    # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
-    test3()
+    # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    # test3()
+
+    # Case 4: Test A* with BalloonERAEnvironment.
+    test_era()
 
     # Expected outputs from Cases 1-3:
     # ------ Case 1: Initial state = target state ---
@@ -357,3 +385,5 @@ if __name__=="__main__":
     # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'stay'), ((np.float64(0.03194087297407955), np.float64(0.028071626935738263), np.float64(10.000054055658351), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0637754093993097), np.float64(0.05741264959936474), np.float64(9.99982956253404), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.09550437678071091), np.float64(0.08802261846718662), np.float64(9.99979730199271), np.float64(0.05)), 'stay'), ((np.float64(0.12712857331563762), np.float64(0.11990106212115517), np.float64(9.999804818339697), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.1586488301314381), np.float64(0.15304748657786632), np.float64(9.999808634033268), np.float64(0.08333333333333333)), None)]
     # ------ Case 3: Initial state = target state with noise, using Haversine distance ---
     # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'ascend'), ((np.float64(0.03074732806206913), np.float64(0.027918130248106156), np.float64(10.028240761498703), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0615009936937044), np.float64(0.05717205027069738), np.float64(10.037375501346354), np.float64(0.03333333333333333)), 'ascend'), ((np.float64(0.09226261009070276), np.float64(0.08776143920750092), np.float64(10.069463552260146), np.float64(0.05)), 'descend'), ((np.float64(0.12303399984336755), np.float64(0.11968626113176586), np.float64(10.036209859091501), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.15381691689843763), np.float64(0.15294577331388504), np.float64(10.015281067642064), np.float64(0.08333333333333333)), None)]
+    # ------ Case 4: Test A* with BalloonERAEnvironment ---
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'ascend'), ((np.float64(0.00010084852098865782), np.float64(0.577479588035151), np.float64(10.028240761498703), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.04461073719514106), np.float64(1.2136785730361956), np.float64(10.037375501346354), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.1058041539878507), np.float64(1.8356345987464802), np.float64(10.067342758256219), np.float64(0.05)), 'stay'), ((np.float64(0.189743420549645), np.float64(2.4069581477187407), np.float64(10.009109374288483), np.float64(0.06666666666666667)), None)]
