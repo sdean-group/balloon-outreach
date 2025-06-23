@@ -262,7 +262,7 @@ class TreeSearchAgent:
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
             # Print the came_from action (if it exists)
-            print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
+            # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
             # Check if we reached the goal state
             if self.is_goal_state(current_state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol])):
@@ -295,16 +295,45 @@ class TreeSearchAgent:
         self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol)
 
 
+def run_astar(initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
+              distance='euclidean', heuristic='euclidean'):
+    """
+    Run A* search from an initial state to a target state.
+    """
+    env = BalloonEnvironment()
+    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic)
+    # Set the balloon's initial state.
+    initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    env.balloon = Balloon(initial_lat=initial_state[0],
+                          initial_lon=initial_state[1],
+                          initial_alt=initial_state[2],)
+    agent.target_lat = target_lat
+    agent.target_lon = target_lon
+    agent.target_alt = target_alt
+    action_sequence = agent.select_action_sequence(initial_state)
+    print(f"Action sequence to target: {action_sequence}")
+
+
 def test1():
     # Case 1 (initial state = target state.)
     print("------ Case 1: Initial state = target state ---")
-    env = BalloonEnvironment()
-    agent = TreeSearchAgent(balloon_env=env, distance='euclidean', heuristic='zero')
-    initial_state = np.array([env.target_lat, env.target_lon, env.target_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    # Set the balloon's initial state.
-    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
-    action_sequence = agent.select_action_sequence(initial_state)
-    print(f"Action sequence to target: {action_sequence}")
+    run_astar(initial_lat=0, initial_long=0, initial_alt=10.0,
+              target_lat=0, target_lon=0, target_alt=10.0,
+              distance='euclidean', heuristic='zero')
+
+def test2():
+    # Case 2 (initial state = target state with some drift).
+    print("------ Case 2: Initial state = target state with noise ---")
+    run_astar(initial_lat=0, initial_long=0, initial_alt=10,
+              target_lat=0.16, target_lon=0.16, target_alt=10,
+              distance='euclidean', heuristic='euclidean')
+
+def test3():
+    # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    print("------ Case 3: Initial state = target state with noise, using Haversine distance ---")
+    run_astar(initial_lat=0, initial_long=0, initial_alt=10,
+              target_lat=0.16, target_lon=0.16, target_alt=10,
+              distance='haversine', heuristic='haversine')
 
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
@@ -312,59 +341,8 @@ if __name__=="__main__":
     # Case 1 (initial state = target state.)
     test1()
 
-    # Case 2 (initial state = target state with some noise + hacking).
-    # Also, changed altitude tolerance to be very large (10 km) for testing.
-    print("------ Case 2: Initial state = target state with noise ---")
-    env = BalloonEnvironment()      # it's important that you re-initialize this before every re-plan.
-    agent = TreeSearchAgent(balloon_env=env, distance='euclidean', heuristic='zero')    # and by consequence, re-initialize this.
-    # otherwise the tree search agent will have the wrong initial balloon (since it uses self.balloon_env.balloon).
-    noise_val = 0.02
-    # initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    # Set the balloon's initial state.
-    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
-    
-    # HACK: change the target state to one that is currently feasible for A*.
-    agent.target_lat = 500.625
-    agent.target_lon = -100.09
-    agent.target_alt = 5.0
-    print(f"Initial state: {initial_state[:-1]}, Target state: {[agent.target_lat, agent.target_lon, agent.target_alt]}")
-    action_sequence = agent.select_action_sequence(initial_state)
-    print(f"Action sequence to target: {action_sequence}")
+    # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
+    test2()
 
     # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
-    # Currently not working...
-    # env = BalloonEnvironment()
-    # agent = TreeSearchAgent(balloon_env=env, distance='haversine', heuristic='zero')
-    # initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    # # Set the balloon's initial state.
-    # env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
-    # # HACK: change the target state to one that is currently feasible for A*.
-    # agent.target_lat = 499.6
-    # agent.target_lon = -99.86
-    # agent.target_alt = 10.0
-    # action_sequence = agent.select_action_sequence(initial_state)
-    # print(f"Action sequence to target: {action_sequence}")
-
-    ## OLD TEST CASES.
-    # # Example usage. Test case 1 (ascend.)
-    # agent = TreeSearchAgent(target_lat=50, target_lon=50, target_alt=10)
-    # initial_state = np.array([50, 50, 0])  # Starting at (lat=0, lon=0, alt=0)
-    # # lat and lon do not change in our transition model.
-    # action_sequence = agent.select_action_sequence(initial_state)
-    # print("Action sequence to target:", action_sequence)
-
-    # # Test case 2 (descend.)
-    # initial_state = np.array([50, 50, 20])  # Starting at (lat=0, lon=0, alt=20)
-    # action_sequence = agent.select_action_sequence(initial_state)
-    # print("Action sequence to target:", action_sequence)
-
-    # # Test case 3 (stay.)
-    # # (it won't explicitly use the 'stay' action because we do goal-checking prior to action application.)
-    # initial_state = np.array([50, 50, 10])  # Starting at (lat=0, lon=0, alt=10)
-    # action_sequence = agent.select_action_sequence(initial_state)
-    # print("Action sequence to target:", action_sequence)
-
-    # # Action sequence to target: [((50, 50, 0), 'ascend'), ((50, 50, 1), 'ascend'), ((50, 50, 2), 'ascend'), ((50, 50, 3), 'ascend'), ((50, 50, 4), 'ascend'), ((50, 50, 5), 'ascend'), ((50, 50, 6), 'ascend'), ((50, 50, 7), 'ascend'), ((50, 50, 8), 'ascend'), ((50, 50, 9), 'ascend'), ((50, 50, 10), None)]
-    # # Action sequence to target: [((50, 50, 20), 'descend'), ((50, 50, 19), 'descend'), ((50, 50, 18), 'descend'), ((50, 50, 17), 'descend'), ((50, 50, 16), 'descend'), ((50, 50, 15), 'descend'), ((50, 50, 14), 'descend'), ((50, 50, 13), 'descend'), ((50, 50, 12), 'descend'), ((50, 50, 11), 'descend'), ((50, 50, 10), None)]
-    # # Action sequence to target: [((50, 50, 10), None)]
+    test3()
