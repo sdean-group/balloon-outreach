@@ -236,6 +236,7 @@ class TreeSearchAgent:
     def select_action_sequence(self, init_state: np.ndarray, plot_suffix : str = '') -> np.ndarray:
         """
         Perform A* starting from an initial state to find a path to the target.
+        Also saves a plot of explored states to disk.
 
         Args
             init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
