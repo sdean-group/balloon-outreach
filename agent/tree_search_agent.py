@@ -300,6 +300,8 @@ def run_astar(initial_lat: float, initial_long: float, initial_alt: float, targe
               distance='euclidean', heuristic='euclidean', plot_suffix: str = ""):
     """
     Run A* search from an initial state to a target state.
+
+    Returns a sequence of actions to reach the target state.
     """
     env = BalloonEnvironment()
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic)
@@ -313,6 +315,7 @@ def run_astar(initial_lat: float, initial_long: float, initial_alt: float, targe
     agent.target_alt = target_alt
     action_sequence = agent.select_action_sequence(initial_state, plot_suffix=plot_suffix)
     print(f"Action sequence to target: {action_sequence}")
+    return action_sequence
 
 
 def test1():
