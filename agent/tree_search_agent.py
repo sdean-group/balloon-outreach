@@ -314,7 +314,8 @@ def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, 
     print(f"Action sequence to target: {action_sequence}")
     return action_sequence
 
-
+## NOTE: because of seeding right now, test cases 1-3 all have to be run in order in order to work correctly.
+## But test case 4 (test_era) can be run independently.
 def test1():
     # Case 1 (initial state = target state.)
     print("------ Case 1: Initial state = target state ---")
@@ -346,6 +347,9 @@ def test_era():
     # Case 4: Test A* with BalloonERAEnvironment.
     print("------ Case 4: Test A* with BalloonERAEnvironment ---")
 
+    # Set random seed to 0 for reproducibility (later: use BalloonERAEnvironment's random seed.)
+    np.random.seed(0)
+
     # BalloonERAEnvironment initialization (see main_ERA.py)
     import xarray as xr
     import datetime as dt
@@ -367,13 +371,13 @@ if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
 
     # Case 1 (initial state = target state.)
-    # test1()
+    test1()
 
     # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
-    # test2()
+    test2()
 
     # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
-    # test3()
+    test3()
 
     # Case 4: Test A* with BalloonERAEnvironment.
     test_era()
