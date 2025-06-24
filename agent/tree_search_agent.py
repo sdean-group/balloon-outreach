@@ -1,6 +1,6 @@
 import numpy as np
-from env.balloon_env import Balloon,BalloonEnvironment
-from env.balloon_ERA_env import BalloonERAEnvironment
+from env.balloon import Balloon
+from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment
 import copy
 import matplotlib.pyplot as plt
 
@@ -362,7 +362,7 @@ def test_era():
 
     # Run same test case as case 3.
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.18, target_lon=2.4, target_alt=10,
+              target_lat=0.060, target_lon=2.25, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test_era")
 
@@ -371,13 +371,13 @@ if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
 
     # Case 1 (initial state = target state.)
-    test1()
+    # test1()
 
     # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
-    test2()
+    # test2()
 
     # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
-    test3()
+    # test3()
 
     # Case 4: Test A* with BalloonERAEnvironment.
     test_era()
