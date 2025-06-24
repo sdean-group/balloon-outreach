@@ -99,15 +99,20 @@ class TreeSearchAgent:
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean'):
+    def __init__(self, balloon_env, distance='euclidean', heuristic='euclidean'):
+        # print("BalloonEnvironment attributes:", dir(balloon_env))
+        # print("target_lat:", balloon_env.target_lat)
+        # print("target_lon:", balloon_env.target_lon)
+        # print("target_altitude:", balloon_env.target_altitude)
         if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
             self.target_lon = balloon_env.target_lon
-            self.target_alt = balloon_env.target_alt
+            self.target_alt = balloon_env.target_altitude
         else:
             print("No environment provided. Initialization failed.")
             return
+       
     
         if distance == 'euclidean':
             self.distance = euclidean_distance
@@ -182,7 +187,7 @@ class TreeSearchAgent:
         self.balloon_env.balloon = balloon  # Update the balloon in the environment.
 
         # # Get current pressure based on altitude
-        pressure = self.balloon_env.balloon.altitude_to_pressure(self.balloon_env.balloon.alt)
+        pressure = self.balloon_env.altitude_to_pressure(self.balloon_env.balloon.alt)
 
         # # Get wind at current position and time
         wind = self.balloon_env.wind_field.get_wind(
@@ -296,18 +301,19 @@ if __name__=="__main__":
 
     # Case 1 (initial state = target state.)
     env = BalloonEnvironment()
+    # print(env.target_lat, env.target_lon, env.target_altitude)
     agent = TreeSearchAgent(balloon_env=env, distance='euclidean', heuristic='zero')
-    initial_state = np.array([env.target_lat, env.target_lon, env.target_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    # Set the balloon's initial state.
-    env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
-    action_sequence = agent.select_action_sequence(initial_state)
-    print(f"Action sequence to target: {action_sequence}")
+    # initial_state = np.array([env.target_lat, env.target_lon, env.target_altitude, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    # # Set the balloon's initial state.
+    # env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
+    # action_sequence = agent.select_action_sequence(initial_state)
+    # print(f"Action sequence to target: {action_sequence}")
 
     # Case 2 (initial state = target state with some noise + hacking).
     # Also, changed altitude tolerance to be very large (10 km) for testing.
     noise_val = 0.02
     # initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
-    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_altitude + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     # Set the balloon's initial state.
     env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
     # HACK: change the target state to one that is currently feasible for A*.
@@ -321,7 +327,7 @@ if __name__=="__main__":
     # Currently not working...
     env = BalloonEnvironment()
     agent = TreeSearchAgent(balloon_env=env, distance='haversine', heuristic='zero')
-    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_alt + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    initial_state = np.array([env.target_lat + noise_val, env.target_lon + noise_val, env.target_altitude + noise_val, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     # Set the balloon's initial state.
     env.balloon.lat, env.balloon.lon, env.balloon.alt = initial_state[:3]
     # HACK: change the target state to one that is currently feasible for A*.

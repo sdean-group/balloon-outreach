@@ -235,6 +235,8 @@ class BalloonEnvironment:
             max_volume=3000.0,
             max_sand=30.0
         )
+        self.target_lat = self.balloon.lat + 3.0
+        self.target_lon = self.balloon.lon + 5.0
         self.current_time = 0.0
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         return self._get_state()
