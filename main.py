@@ -15,7 +15,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     
     for step in range(max_steps):
         # Get action from agent
-        action = agent.select_action(state)
+        action = agent.select_action(state, max_steps, step)
         # print(action)
         # Take step
         state, reward, done, info = env.step(action)
