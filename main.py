@@ -19,7 +19,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     
     for step in range(max_steps):
         # Get action from agent
-        # action = agent.select_action(state)
+        # action = agent.select_action(state, max_steps, step)
         # print(action)
         #PID
         current_alt_m = state[2] * 1000  # Convert km to meters
