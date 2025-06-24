@@ -1,3 +1,5 @@
+## Dependencies: jax, opensimplex
+
 import xarray as xr
 import numpy as np
 import datetime as dt
