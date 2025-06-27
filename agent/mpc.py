@@ -2,29 +2,30 @@ from env.balloon import Balloon
 from env.balloon_env import BalloonEnvironment, BalloonERAEnvironment, BaseBalloonEnvironment
 from env.ERA_wind_field import WindField
 import jax
-import jax.numpy as jnp
 import numpy as np
 from functools import partial
 import datetime as dt
 import time
 import copy
 
+
 def sigmoid(x):
     """Returns a sigmoid function with range [-1, 1] instead of [0,1]."""
-    return 2 / (1 + jnp.exp(-x)) - 1
+    return 2 / (1 + np.exp(-x)) - 1
 
 def inverse_sigmoid(x):
     """Returns the inverse of the custom sigmoid defined above. """
-    return jnp.log((x+1)/(1-x))
+    return np.log((x+1)/(1-x))
 
 
-def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alpha=0.01,max_iters=80, isNormalized=0):
+def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alpha=0.01,max_iters=10, isNormalized=0):
     """Basic gradient descent with just a learning rate and also normalizing the gradient. Doing both the learning rate and normalization seemed to perform worse and take longer. High learning rates had power violations. Slower learning rates performed better than baseline but took more time (almost 4s)."""
     print(f"USING LEARNING RATE {alpha}, MAXITERS {max_iters}, ISNORMALIZED {isNormalized}")
     plan = initial_plan
 
     for gradient_steps in range(max_iters):
-        gradient_plan = get_dplan(plan, balloon_env)
+
+        gradient_plan = finite_difference_grad(plan, balloon_env)
 
         if  np.isnan(gradient_plan).any() or abs(np.linalg.norm(gradient_plan)) < 1e-7:
             # print('Exiting early, |∂plan| =',abs(jnp.linalg.norm(dplan)))
@@ -38,6 +39,8 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
 
     return plan, gradient_steps
 
+
+
 np.random.seed(seed=42)
 def get_initial_plans(num_plans, plan_steps, plan_type):
     """ Returns an initial trajectory for the balloon.
@@ -45,18 +48,41 @@ def get_initial_plans(num_plans, plan_steps, plan_type):
         :param plan_steps: the length of the returned plan
         :param plan_type: the method used to generate the plan. Should be 'random', 'constant' (and later 'tree')
         """
+    res = np.array([])
+    for _ in range(num_plans):
 
-    # should we make `num_plans` plans and average them?
-    if plan_type == 'random':
-        return np.random.uniform(low=-1.0, high=1.0, size=plan_steps)
-    elif plan_type == 'constant':
-        return np.zeros(plan_steps)
-    # TODO: add tree search below
-    else:
-        return np.zeros(plan_steps)
+        # should we make `num_plans` plans and average them?
+        if plan_type == 'random':
+            res = np.append(res, np.random.uniform(low=-1.0, high=1.0, size=plan_steps)) 
+        elif plan_type == 'constant':
+            res = np.append(res, np.zeros(plan_steps))
+        # TODO: add tree search below
+        else:
+            res = np.append(res, np.zeros(plan_steps))
+    return np.reshape(res, (num_plans, plan_steps))
+    
+def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
+        """Returns the cost of a plan. The cost is calculated as the euclidean distance between the final state after executing the plan and the target state."""
+        #For implementing fly-as-far, could have it be the negative distance from the original starting point
+        cost = 0.0
+
+        plan = sigmoid(plan)
+
+        curr_balloon_env = copy.deepcopy(balloon_env)
+        for i in range(len(plan)):
+            action = plan[i]
+            final_state,reward, done, reason = curr_balloon_env.step(action)
+            if done:
+                print(f"In cost, reason for stopping: {reason}")
+                break
+        #jax.debug.print("final state x = {x}, y = {y}, pressure = {p}", x=final_balloon.state.x, y=final_balloon.state.y, p=final_balloon.state.pressure)
+        final_state = np.array(final_state[:3])
+        target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
+        cost = np.linalg.norm(final_state- target_state)
+        return cost
     
 @partial(jax.jit, static_argnums=1)
-def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
+def jax_plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         """ Returns the cost of a plan. The cost is calculated as the *euclidean distance* (change to Haversine?) between the final state after executing the plan and the target state.
         
             :param plan: the series of actions to evaluate
@@ -87,26 +113,27 @@ def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         return cost
 
 def finite_difference_grad(plan, balloon_env, epsilon=1e-5, sigma=1.0, alpha=1.0):
-    # is taking too long
-    print('in the grad')
+    # takes a while
+    #print('in the grad')
     grad = np.zeros_like(plan)
     
     cost_up = np.zeros_like(plan)
     cost_down = np.zeros_like(plan)
     
-    v = np.random.normal(0,sigma)
-    for i in range(len(8)):
-        plan_up = plan.copy()
-        plan_down = plan.copy()
-        plan_up[i] += epsilon*v
-        plan_down[i] -= epsilon*v
+    
+    for i in range(len(plan)):
+        if i < 5:
+            v = np.random.normal(0,sigma)
+            plan_up = plan.copy()
+            plan_down = plan.copy()
+            plan_up[i] += epsilon*v
+            plan_down[i] -= epsilon*v
 
-        cost_up[i] = plan_cost(plan_up, balloon_env)
-        cost_down[i] = plan_cost(plan_down, balloon_env)
-
-        #grad[i] = ((cost_up - cost_down) *v * alpha) / (2 * epsilon)
-    grad = ((cost_up - cost_down) *v * alpha) / (2 * epsilon)
-    print(f'grad is {grad}')
+            cost_up = plan_cost(plan_up, balloon_env)
+            cost_down = plan_cost(plan_down, balloon_env)
+            grad[i] = ((cost_up - cost_down) *v * alpha) / (2 * epsilon)
+        else:
+            grad[i] = grad[4]
 
     return grad
 
@@ -138,6 +165,7 @@ class MPCAgent:
             print("No environment provided. Initialization failed.")
             return
         
+        #1 step= 30min so 240 steps is 12 hrs
         self.plan_time = 2*24*60*60
         self.time_delta = 3*60
 
@@ -147,8 +175,6 @@ class MPCAgent:
 
         self.plan = None
         self.i = 0
-
-        self.key = jax.random.key(seed=0)
    
         self.steps_within_radius = 0
 
@@ -164,57 +190,32 @@ class MPCAgent:
         action = self.plan[self.i]
         state, reward, done, reason = self.balloon_env.step(action)
 
-        # no more stationkeeping so don't need this?
-        # if (self.balloon.state.x/1000)**2 + (self.balloon.state.y/1000)**2 <= (50.0)**2:
-        #     self.steps_within_radius += 1
-
         #could keep track of steps taken towards target/away from init location
 
     #should this be a float if we want continous actions??
     def begin_episode(self, state: np.ndarray, max_steps:int) -> int:        
-        initialization_type = 'best_altitude'
         #print('USING ' + initialization_type + ' INITIALIZATION')
-
-        if initialization_type == 'opd':
-            start = opd.ExplorerState(
-                self.balloon.state.x,
-                self.balloon.state.y,
-                self.balloon.state.pressure,
-                self.balloon.state.time_elapsed)
-
-            search_delta_time = 60*60
-            best_node, best_node_early = opd.run_opd_search(start, self.wind_field, [0, 1, 2], opd.ExplorerOptions(budget=25_000, planning_horizon=240, delta_time=search_delta_time))
-            initial_plan =  opd.get_plan_from_opd_node(best_node, search_delta_time=search_delta_time, plan_delta_time=self.time_delta)
-
-        elif initialization_type == 'best_altitude':
-            initial_plans = get_initial_plans(100, max_steps, 'constant')
-            print('1')
+        initial_plans = get_initial_plans(10, max_steps, 'constant')
             
-            batched_cost = []
-            batched_cost.append(plan_cost(initial_plans, self.balloon_env))
-            # for i in range(len(initial_plans)):
+        batched_cost = []
+        for i in range(len(initial_plans)):
+            batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
+        
+        min_index_so_far = np.argmin(batched_cost)
+        min_value_so_far = batched_cost[min_index_so_far]
 
-            #     batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
-            
-            min_index_so_far = np.argmin(batched_cost)
-            min_value_so_far = batched_cost[min_index_so_far]
+        initial_plan = initial_plans[min_index_so_far]
+ 
+        if self.plan is not None and plan_cost(self.plan, self.balloon_env) < min_value_so_far:
+            print('Using the previous optimized plan as initial plan')
+            initial_plan = self.plan
+        coast = inverse_sigmoid(np.random.uniform(-0.2, 0.2, size=(max_steps, )))
+        if plan_cost(coast, self.balloon_env) < min_value_so_far:
+            #print('Using the nothing plan as initial plan')
+            initial_plan = coast
 
-            initial_plan = initial_plans[min_index_so_far]
-            if self.plan is not None and plan_cost(self.plan, self.balloon_env) < min_value_so_far:
-                print('Using the previous optimized plan as initial plan')
-                initial_plan = self.plan
-            print('2')
-            coast = inverse_sigmoid(np.random.uniform(-0.2, 0.2, size=(max_steps, )))
-            if plan_cost(coast, self.balloon_env) < min_value_so_far:
-                #print('Using the nothing plan as initial plan')
-                initial_plan = coast
 
-        elif initialization_type == 'random':
-            initial_plan = np.random.uniform(-1.0, 1.0, size=(max_steps, ))
-        else:
-            initial_plan = np.zeros((max_steps, ))
-
-        b4 = time.time()            
+        b4 = time.time()       
         start_cost = plan_cost(initial_plan,self.balloon_env)
         plan,step= grad_descent_optimizer(initial_plan, self.balloon_env)
 
@@ -233,23 +234,29 @@ class MPCAgent:
         self._deadreckon()
 
         action = self.plan[self.i]
-        print(f"planned action {action}, integer action? {action.item()}")
         return action.item()
 
 
     def select_action(self, state: np.ndarray, max_steps:int, step:int) -> int:
-        print(f"state passed in is {state}")
         self.i+=1
         if self.plan is None:
-            self.plan = get_initial_plans(100, max_steps, 'constant')
+            initial_plans = get_initial_plans(10, max_steps, 'constant')
+            batched_cost = []
+            for i in range(len(initial_plans)):
+                batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
+        
+            min_index_so_far = np.argmin(batched_cost)
+
+            self.plan = initial_plans[min_index_so_far]
 
         # assuming planning horizon is 23?
-        N = min(len(self.plan), 23)
+        N = min(len(self.plan), 5)
         if self.i>0 and self.i%N==0:
-            self.key, rng = jax.random.split(self.key, 2)
             # Padding random actions after the planning horizon
-            self.plan = inverse_sigmoid(np.hstack((self.plan[N:], jax.random.uniform(rng, (N, ), minval=-0.3, maxval=0.3))))
-            return self.begin_episode(state, max_steps)
+            random_plan = np.random.uniform(-0.3,0.3,(N,))
+            self.plan = inverse_sigmoid(np.hstack((self.plan[N:], random_plan)))
+            hi = self.begin_episode(state, max_steps)
+            return hi
         else:
             # print('not replanning')
             self._deadreckon()
