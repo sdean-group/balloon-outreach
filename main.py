@@ -2,6 +2,7 @@ import numpy as np
 from env.balloon_env import BalloonEnvironment
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
+from agent.mpc import MPCAgent
 import matplotlib.pyplot as plt
 
 def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 100) -> float:
@@ -65,7 +66,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
 def main():
     # Create environment and agent
     env = BalloonEnvironment()
-    agent = RandomAgent()
+    agent = MPCAgent(env)
     # agent = GoalDirectedAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
     # Run one episode
     reward = run_episode(env, agent)
