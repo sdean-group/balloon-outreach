@@ -6,9 +6,6 @@ import matplotlib.pyplot as plt
 
 ## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
-# Set random seed to 0 for reproducibility.
-np.random.seed(0)
-
 # Copied over from env/balloon_env.py in branch v0_edit.
 def haversine_distance(state_start, state_end):
     """Calculate great-circle distance between two (lat, lon) points in meters."""
@@ -319,6 +316,8 @@ def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, 
 def test1():
     # Case 1 (initial state = target state.)
     print("------ Case 1: Initial state = target state ---")
+    # Set random seed to 0 for reproducibility.
+    np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10.0,
               target_lat=0, target_lon=0, target_alt=10.0,
@@ -328,18 +327,22 @@ def test1():
 def test2():
     # Case 2 (initial state = target state with some drift).
     print("------ Case 2: Initial state = target state with noise ---")
+    # Set random seed to 0 for reproducibility.
+    np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.16, target_lon=0.16, target_alt=10,
+              target_lat=0.14, target_lon=0.16, target_alt=10,
               distance='euclidean', heuristic='euclidean',
               plot_suffix="test2")
 
 def test3():
     # Case 3 [test Haversine distance metric and heuristic, otherwise same as Case 2.]
     print("------ Case 3: Initial state = target state with noise, using Haversine distance ---")
+    # Set random seed to 0 for reproducibility.
+    np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.16, target_lon=0.16, target_alt=10,
+              target_lat=0.14, target_lon=0.16, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test3")
     
@@ -358,7 +361,7 @@ def test_era():
     # 2. pick a reference start_time (should match your dataset’s first valid_time)
     start_time = dt.datetime(2024, 7, 1, 0, 0)
     # Create environment and agent
-    env = BalloonERAEnvironment(ds=ds, start_time=start_time)
+    env = BalloonERAEnvironment(ds=ds, start_time=start_time, viz=False)
 
     # Run same test case as case 3.
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
@@ -370,14 +373,14 @@ def test_era():
 if __name__=="__main__":
     ## NEW TEST CASES (6/16/2025).
 
-    # Case 1 (initial state = target state.)
-    # test1()
+    # # Case 1 (initial state = target state.)
+    test1()
 
-    # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
-    # test2()
+    # # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
+    test2()
 
-    # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
-    # test3()
+    # # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    test3()
 
     # Case 4: Test A* with BalloonERAEnvironment.
     test_era()
@@ -386,8 +389,8 @@ if __name__=="__main__":
     # ------ Case 1: Initial state = target state ---
     # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), None)]
     # ------ Case 2: Initial state = target state with noise ---
-    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'stay'), ((np.float64(0.03194087297407955), np.float64(0.028071626935738263), np.float64(10.000054055658351), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0637754093993097), np.float64(0.05741264959936474), np.float64(9.99982956253404), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.09550437678071091), np.float64(0.08802261846718662), np.float64(9.99979730199271), np.float64(0.05)), 'stay'), ((np.float64(0.12712857331563762), np.float64(0.11990106212115517), np.float64(9.999804818339697), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.1586488301314381), np.float64(0.15304748657786632), np.float64(9.999808634033268), np.float64(0.08333333333333333)), None)]
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'stay'), ((np.float64(0.028296857220620968), np.float64(0.030217999015719896), np.float64(10.000006162530978), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.056536064465265115), np.float64(0.06175999003859439), np.float64(9.999997987460512), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.084719169413003), np.float64(0.09462547588485093), np.float64(9.999998116572215), np.float64(0.05)), 'stay'), ((np.float64(0.11284772158361407), np.float64(0.12881396562205658), np.float64(9.99999789138437), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.1409232725619879), np.float64(0.16432497443867367), np.float64(9.999997884086225), np.float64(0.08333333333333333)), None)]
     # ------ Case 3: Initial state = target state with noise, using Haversine distance ---
-    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'ascend'), ((np.float64(0.03074732806206913), np.float64(0.027918130248106156), np.float64(10.028240761498703), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.0615009936937044), np.float64(0.05717205027069738), np.float64(10.037375501346354), np.float64(0.03333333333333333)), 'ascend'), ((np.float64(0.09226261009070276), np.float64(0.08776143920750092), np.float64(10.069463552260146), np.float64(0.05)), 'descend'), ((np.float64(0.12303399984336755), np.float64(0.11968626113176586), np.float64(10.036209859091501), np.float64(0.06666666666666667)), 'stay'), ((np.float64(0.15381691689843763), np.float64(0.15294577331388504), np.float64(10.015281067642064), np.float64(0.08333333333333333)), None)]
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'descend'), ((np.float64(0.028296857220620968), np.float64(0.030217999015719896), np.float64(9.976661860657844), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.05653602698671051), np.float64(0.06175990621982107), np.float64(9.940651320675139), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.08471903271482123), np.float64(0.0946251978266461), np.float64(9.93978505832379), np.float64(0.05)), 'stay'), ((np.float64(0.11284748019902958), np.float64(0.12881350929071972), np.float64(9.963307754266621), np.float64(0.06666666666666667)), 'ascend'), ((np.float64(0.14092296497152726), np.float64(0.16432442080656626), np.float64(9.997590219824646), np.float64(0.08333333333333333)), None)]
     # ------ Case 4: Test A* with BalloonERAEnvironment ---
-    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'ascend'), ((np.float64(0.00010084852098865782), np.float64(0.577479588035151), np.float64(10.028240761498703), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.04461073719514106), np.float64(1.2136785730361956), np.float64(10.037375501346354), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.1058041539878507), np.float64(1.8356345987464802), np.float64(10.067342758256219), np.float64(0.05)), 'stay'), ((np.float64(0.189743420549645), np.float64(2.4069581477187407), np.float64(10.009109374288483), np.float64(0.06666666666666667)), None)]
+    # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), 'descend'), ((np.float64(0.00010084852098865782), np.float64(0.577479588035151), np.float64(9.976661860657844), np.float64(0.016666666666666666)), 'stay'), ((np.float64(0.01691783033279263), np.float64(1.1620614711529997), np.float64(9.940651320675139), np.float64(0.03333333333333333)), 'stay'), ((np.float64(0.034743348664190134), np.float64(1.704066487561494), np.float64(9.93978505832379), np.float64(0.05)), 'ascend'), ((np.float64(0.05644705627335142), np.float64(2.2493163255951414), np.float64(9.981959535668265), np.float64(0.06666666666666667)), None)]
