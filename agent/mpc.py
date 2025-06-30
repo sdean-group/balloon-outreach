@@ -7,6 +7,7 @@ from functools import partial
 import datetime as dt
 import time
 import copy
+import scipy
 
 
 def sigmoid(x):
@@ -26,6 +27,7 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
     for gradient_steps in range(max_iters):
 
         gradient_plan = finite_difference_grad(plan, balloon_env)
+        print(f"lol {gradient_plan}")
 
         if  np.isnan(gradient_plan).any() or abs(np.linalg.norm(gradient_plan)) < 1e-7:
             # print('Exiting early, |∂plan| =',abs(jnp.linalg.norm(dplan)))
@@ -42,20 +44,83 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
 
 
 np.random.seed(seed=42)
-def get_initial_plans(num_plans, plan_steps, plan_type):
+def get_initial_plans(balloon:Balloon, forecast:WindField, balloon_env:BaseBalloonEnvironment, num_plans, plan_steps, plan_type):
     """ Returns an initial trajectory for the balloon.
 
         :param plan_steps: the length of the returned plan
         :param plan_type: the method used to generate the plan. Should be 'random', 'constant' (and later 'tree')
         """
+    
+    if plan_type == 'best_altitude':
+
+        flight_record = {balloon.alt: 0}
+
+        time_to_top = 0
+        max_km_to_explore = 19.1
+
+        up_balloon = balloon
+        while time_to_top < plan_steps and up_balloon.alt < max_km_to_explore:
+            up_pressure = up_balloon.altitude_to_pressure(up_balloon.alt * 1000)
+            wind_vector = forecast.get_wind(up_balloon.lon, up_balloon.lat, up_pressure, balloon_env.current_time)
+            up_balloon.step(wind_vector, balloon_env.dt, 0.99)
+            time_to_top += 1
+
+            flight_record[up_balloon.alt] = time_to_top
+
+        time_to_bottom = 0
+        min_km_to_explore = 15.4
+
+        down_balloon = balloon
+        while time_to_bottom < plan_steps and down_balloon.alt > min_km_to_explore:
+            down_pressure = down_balloon.altitude_to_pressure(down_balloon.alt * 1000)
+            wind_vector = forecast.get_wind(down_balloon.lon, down_balloon.lat, down_pressure, balloon_env.current_time)
+            down_balloon.step(wind_vector, balloon_env.dt, -0.99)
+            time_to_bottom += 1
+
+            flight_record[down_balloon.alt] = time_to_bottom
+        
+            # sorted (should be)
+            # flight_record = flight_record_down[::-1] + flight_record_up
+
+            # Sort the dictionary by keys (altitudes) and split them into two separate lists
+            sorted_flight_record = sorted(flight_record.items())
+
+            flight_record_altitudes = [altitude for altitude, _ in sorted_flight_record]
+            flight_record_steps = [steps for _, steps in sorted_flight_record]
+            
+            interpolator = scipy.interpolate.RegularGridInterpolator((flight_record_altitudes, ), flight_record_steps, bounds_error=False, fill_value=None)
+
+            plans = []
+
+            for i in range(num_plans):
+                random_height = np.random.uniform(15.4, 19.1)
+                going_up = random_height >= balloon.alt
+                steps = int(round(interpolator(np.array([random_height]))[0]))
+                steps = max(0, min(steps, plan_steps))
+                # print(steps)
+
+                plan = np.zeros((plan_steps, ))
+                plan[:steps] = +0.99 if going_up else -0.99 
+                # print(random_height, steps)
+                try:
+                    if steps < plan_steps:
+                        plan[steps:] += np.random.uniform(-0.3, 0.3, plan_steps - steps)
+                except:
+                    print(balloon.alt, random_height, steps, plan_steps)
+
+                plans.append(plan)
+        return inverse_sigmoid(np.array(plans))
+    
+
+
     res = np.array([])
     for _ in range(num_plans):
-
         # should we make `num_plans` plans and average them?
         if plan_type == 'random':
             res = np.append(res, np.random.uniform(low=-1.0, high=1.0, size=plan_steps)) 
         elif plan_type == 'constant':
             res = np.append(res, np.zeros(plan_steps))
+
         # TODO: add tree search below
         else:
             res = np.append(res, np.zeros(plan_steps))
@@ -69,6 +134,7 @@ def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         plan = sigmoid(plan)
 
         curr_balloon_env = copy.deepcopy(balloon_env)
+        init_state = np.array([curr_balloon_env.balloon.lat, curr_balloon_env.balloon.lon, curr_balloon_env.balloon.alt])
         for i in range(len(plan)):
             action = plan[i]
             final_state,reward, done, reason = curr_balloon_env.step(action)
@@ -79,6 +145,8 @@ def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         final_state = np.array(final_state[:3])
         target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
         cost = np.linalg.norm(final_state- target_state)
+        cost_deg = -np.dot((final_state - init_state), (target_state - init_state))
+        alt_penalty = np.exp(abs(final_state[2] - target_state[2]))
         return cost
     
 @partial(jax.jit, static_argnums=1)
@@ -112,9 +180,8 @@ def jax_plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         cost = np.linalg.norm(final_state - target_state)
         return cost
 
-def finite_difference_grad(plan, balloon_env, epsilon=1e-5, sigma=1.0, alpha=1.0):
+def finite_difference_grad(plan, balloon_env, epsilon=100, sigma=1.0, alpha=1.0):
     # takes a while
-    #print('in the grad')
     grad = np.zeros_like(plan)
     
     cost_up = np.zeros_like(plan)
@@ -132,6 +199,7 @@ def finite_difference_grad(plan, balloon_env, epsilon=1e-5, sigma=1.0, alpha=1.0
             cost_up = plan_cost(plan_up, balloon_env)
             cost_down = plan_cost(plan_down, balloon_env)
             grad[i] = ((cost_up - cost_down) *v * alpha) / (2 * epsilon)
+            #print(f"costup {cost_up}, costdown{cost_down}, grad{grad[i]}")
         else:
             grad[i] = grad[4]
 
@@ -153,7 +221,7 @@ class MPCAgent:
     Optimizer: Gradient Descent/Random Search (for no gradient implementation)
     """
         
-    def __init__(self, balloon_env=None): 
+    def __init__(self, balloon_env=None, control_horizon:int=10): 
         # copied from tree_search_agent.py
         if balloon_env is not None:    # NOTE: should either be BalloonEnvironment or BalloonERAEnvironment
             self.balloon_env:BaseBalloonEnvironment = balloon_env
@@ -164,7 +232,7 @@ class MPCAgent:
         else:
             print("No environment provided. Initialization failed.")
             return
-        
+        self.control_horizon = control_horizon
         #1 step= 30min so 240 steps is 12 hrs
         self.plan_time = 2*24*60*60
         self.time_delta = 3*60
@@ -192,10 +260,10 @@ class MPCAgent:
 
         #could keep track of steps taken towards target/away from init location
 
-    #should this be a float if we want continous actions??
     def begin_episode(self, state: np.ndarray, max_steps:int) -> int:        
         #print('USING ' + initialization_type + ' INITIALIZATION')
-        initial_plans = get_initial_plans(10, max_steps, 'constant')
+        initial_plans = get_initial_plans(self.balloon_env.balloon,self.balloon_env.wind_field, self.balloon_env, 10, max_steps, 'best_altitude')
+        
             
         batched_cost = []
         for i in range(len(initial_plans)):
@@ -240,7 +308,7 @@ class MPCAgent:
     def select_action(self, state: np.ndarray, max_steps:int, step:int) -> int:
         self.i+=1
         if self.plan is None:
-            initial_plans = get_initial_plans(10, max_steps, 'constant')
+            initial_plans = get_initial_plans(self.balloon_env.balloon,self.balloon_env.wind_field, self.balloon_env, 10, max_steps, 'best_altitude')
             batched_cost = []
             for i in range(len(initial_plans)):
                 batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
@@ -248,9 +316,12 @@ class MPCAgent:
             min_index_so_far = np.argmin(batched_cost)
 
             self.plan = initial_plans[min_index_so_far]
+            action = self.plan[self.i]
+            # print('action', action)
+            return action.item()
 
-        # assuming planning horizon is 23?
-        N = min(len(self.plan), 5)
+
+        N = min(len(self.plan), self.control_horizon)
         if self.i>0 and self.i%N==0:
             # Padding random actions after the planning horizon
             random_plan = np.random.uniform(-0.3,0.3,(N,))
