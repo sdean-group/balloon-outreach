@@ -145,7 +145,7 @@ class Balloon:
         total_dMass = initial_mass - self.helium_mass
         total_dSand = initial_sand - self.sand
         self.alt = alt_current
-        v_current = np.clip(v_current, -5, 5)
+        v_current = np.clip(v_current, -self.max_velocity, self.max_velocity)
         if v_current < -1e100:
             v_current = 0.0
         #print(f"vcurrent{v_current}")
