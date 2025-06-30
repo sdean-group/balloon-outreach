@@ -20,6 +20,13 @@ def inverse_sigmoid(x):
     """Returns the inverse of the custom sigmoid defined above. """
     return np.log((x+1)/(1-x))
 
+def balloon_cost(balloon: Balloon, target_state):
+    state = np.array([balloon.lat, balloon.lon, balloon.alt])
+    cost = np.linalg.norm(state- target_state)
+    sand_fraction = balloon.sand/balloon.max_sand
+    sand_cost = (1 -  (1 / (1 + np.exp(-100*(sand_fraction - 0.1)))))
+    return cost + sand_cost
+
 def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         """Returns the cost of a plan. The cost is calculated as the euclidean distance between the final state after executing the plan and the target state."""
         #For implementing fly-as-far, could have it be the negative distance from the original starting point
@@ -28,20 +35,28 @@ def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         plan = sigmoid(plan)
 
         curr_balloon_env = copy.deepcopy(balloon_env)
+        target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
         init_state = np.array([curr_balloon_env.balloon.lat, curr_balloon_env.balloon.lon, curr_balloon_env.balloon.alt])
         for i in range(len(plan)):
+            cost += (0.99**i) * balloon_cost(curr_balloon_env.balloon, target_state)
             action = plan[i]
+            # Check if the sand/power gets too low?
+            if curr_balloon_env.balloon.sand < 5:
+                action = 0.0
             final_state,reward, done, reason = curr_balloon_env.step(action)
             if done:
                 print(f"In cost, reason for stopping: {reason}")
                 break
+            
         #jax.debug.print("final state x = {x}, y = {y}, pressure = {p}", x=final_balloon.state.x, y=final_balloon.state.y, p=final_balloon.state.pressure)
         final_state = np.array(final_state[:3])
-        target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
-        cost = np.linalg.norm(final_state- target_state)
+
+        terminal_cost = (0.99**len(plan)) * (balloon_cost(curr_balloon_env.balloon, target_state))
+        
+        #cost = np.linalg.norm(final_state- target_state)
         cost_deg = -np.dot((final_state - init_state), (target_state - init_state))
         alt_penalty = np.exp(abs(final_state[2] - target_state[2]))
-        return alt_penalty*cost + cost_deg
+        return cost + terminal_cost
 
 
 np.random.seed(seed=42)
@@ -239,9 +254,31 @@ class MPPIAgent:
 
         action = self.plan[self.i]
         return action.item()
+    
+    def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
+        """
+        Check if the current state is the goal state.
+
+        Args:
+            state: Current state of the environment as a numpy array [lat, lon, alt, t]
+        
+        Returns:
+            True if the current state matches the target state within a tolerance, False otherwise.
+        """
+        return (np.isclose(state[0], self.target_lat, atol=atols[0]) and
+                np.isclose(state[1], self.target_lon, atol=atols[1]) and
+                np.isclose(state[2], self.target_alt, atol=atols[2]))
+
 
     def select_action(self, state: np.ndarray, max_steps:int, step:int) -> int:
         self.i+=1
+
+        lat_long_atol = 1e-2  # 0.01 degrees in latitude/longitude.
+        alt_atol = 0.02  # 20 cm in altitude.
+        if (self.is_goal_state(state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol]))):
+            print(f"reached target state, break main loop")
+            return 0.0
+        
         if self.plan is None:
             initial_plans = get_initial_plans(self.balloon_env.balloon,self.balloon_env.wind_field, self.balloon_env, 10, max_steps, 'constant')
             batched_cost = []
@@ -277,3 +314,11 @@ class MPPIAgent:
         self.balloon = None
         self.plan = None
         # self.plan_steps = 960 + 23
+
+        """
+        Step 59: lat: 18.20, lon: -26.23, alt: 15.35
+        ADJUSTED COST:
+        Step 64: lat: 19.15, lon: -24.33, alt: 16.04
+
+Episode terminated: No sand left
+        """
