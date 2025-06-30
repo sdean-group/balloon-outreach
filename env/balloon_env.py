@@ -102,58 +102,60 @@ class BalloonEnvironment(BaseBalloonEnvironment):
 
 class BalloonERAEnvironment(BaseBalloonEnvironment):
     """Environment for balloon navigation using ERA5 wind field"""
-    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None):
+    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, viz = True):
         balloon = Balloon(initial_lat=0.0, initial_lon=0.0, initial_alt=10.0)
         super().__init__(balloon=balloon, dt=60, target_lat=500, target_lon=-100, target_alt=12)
         self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed)
         self.ds = ds
         self.start_time = start_time
         self.noise_seed = noise_seed
-        self.fig = plt.figure(figsize=(15, 5))
-        self.ax1 = self.fig.add_subplot(131, projection='3d')  # 3D Position plot
-        self.ax2 = self.fig.add_subplot(132)  # Resources plot
-        self.ax3 = self.fig.add_subplot(133)  # Wind profile plot
-        plt.tight_layout()
+        self.viz = viz
+        if self.viz:
+            self.fig = plt.figure(figsize=(15, 5))
+            self.ax1 = self.fig.add_subplot(131, projection='3d')  # 3D Position plot
+            self.ax2 = self.fig.add_subplot(132)  # Resources plot
+            self.ax3 = self.fig.add_subplot(133)  # Wind profile plot
+            plt.tight_layout()
 
 
 
     def render(self) -> None:
-        self.ax1.clear()
-        self.ax2.clear()
-        self.ax3.clear()
-        self.trajectory['lat'].append(self.balloon.lat)
-        self.trajectory['lon'].append(self.balloon.lon)
-        self.trajectory['alt'].append(self.balloon.alt)
-        lats = np.array(self.trajectory['lat'])
-        lons = np.array(self.trajectory['lon'])
-        alts = np.array(self.trajectory['alt'])
-        if len(lats) > 1:
-            self.ax1.plot(lons, lats, alts, 'b-', linewidth=2, label='Trajectory')
-        self.ax1.scatter(lons[-1], lats[-1], alts[-1], c='red', marker='o', s=150, label='Current Position')
-        self.ax1.scatter(self.target_lon, self.target_lat, 10, c='green', marker='*', s=200, label='Target')
-        self.ax1.set_xlabel('Longitude (km)')
-        self.ax1.set_ylabel('Latitude (km)')
-        self.ax1.set_zlabel('Altitude (km)')
-        self.ax1.set_title('Balloon Navigation')
-        self.ax1.set_xlim(-10, 10)
-        self.ax1.set_ylim(-10, 10)
-        self.ax1.set_zlim(0, 25)
-        self.ax1.legend()
-        self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.max_sand])
-        self.ax2.set_ylim(0, 1)
-        self.ax2.set_title('Resources')
-        wind_column = self._get_wind_column()
-        u_winds = wind_column[::2]
-        v_winds = wind_column[1::2]
-        wind_speeds = np.sqrt(u_winds**2 + v_winds**2)
-        self.ax3.plot(wind_speeds, self.wind_field.pressure_levels, 'b-')
-        self.ax3.grid(True)
-        self.ax3.set_title('Wind Speed Profile')
-        self.ax3.set_xlabel('Wind Speed (m/s)')
-        self.ax3.set_ylabel('Pressure (hPa)')
-        self.ax3.invert_yaxis()
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-        plt.pause(0.1)
-
+        if self.viz:
+            self.ax1.clear()
+            self.ax2.clear()
+            self.ax3.clear()
+            self.trajectory['lat'].append(self.balloon.lat)
+            self.trajectory['lon'].append(self.balloon.lon)
+            self.trajectory['alt'].append(self.balloon.alt)
+            lats = np.array(self.trajectory['lat'])
+            lons = np.array(self.trajectory['lon'])
+            alts = np.array(self.trajectory['alt'])
+            if len(lats) > 1:
+                self.ax1.plot(lons, lats, alts, 'b-', linewidth=2, label='Trajectory')
+            self.ax1.scatter(lons[-1], lats[-1], alts[-1], c='red', marker='o', s=150, label='Current Position')
+            self.ax1.scatter(self.target_lon, self.target_lat, 10, c='green', marker='*', s=200, label='Target')
+            self.ax1.set_xlabel('Longitude (km)')
+            self.ax1.set_ylabel('Latitude (km)')
+            self.ax1.set_zlabel('Altitude (km)')
+            self.ax1.set_title('Balloon Navigation')
+            self.ax1.set_xlim(-10, 10)
+            self.ax1.set_ylim(-10, 10)
+            self.ax1.set_zlim(0, 25)
+            self.ax1.legend()
+            self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.max_sand])
+            self.ax2.set_ylim(0, 1)
+            self.ax2.set_title('Resources')
+            wind_column = self._get_wind_column()
+            u_winds = wind_column[::2]
+            v_winds = wind_column[1::2]
+            wind_speeds = np.sqrt(u_winds**2 + v_winds**2)
+            self.ax3.plot(wind_speeds, self.wind_field.pressure_levels, 'b-')
+            self.ax3.grid(True)
+            self.ax3.set_title('Wind Speed Profile')
+            self.ax3.set_xlabel('Wind Speed (m/s)')
+            self.ax3.set_ylabel('Pressure (hPa)')
+            self.ax3.invert_yaxis()
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+            plt.pause(0.1)
 
