@@ -89,6 +89,7 @@ class Balloon:
             F_current = buoyancy - weight + drag
 
             velocity_error = v_target - v_current
+            #print(f"vel_error {velocity_error}, vert vel {self.vertical_velocity}")
             velocity_error_rate = (velocity_error - vel_error_prev) / delta_t
             vel_error_integral += velocity_error * delta_t
             vel_error_integral = np.clip(vel_error_integral, -10.0, 10.0)
@@ -144,6 +145,10 @@ class Balloon:
         total_dMass = initial_mass - self.helium_mass
         total_dSand = initial_sand - self.sand
         self.alt = alt_current
+        v_current = np.clip(v_current, -5, 5)
+        if v_current < -1e100:
+            v_current = 0.0
+        #print(f"vcurrent{v_current}")
         self.vertical_velocity = v_current
         return total_dMass, total_dSand
 
@@ -168,6 +173,7 @@ class Balloon:
 
         drag_coefficient *= (1 + 0.05 * (self.alt / 10))
 
+#add nan check here?
         if abs(vel) < 1e-6:
             drag_force = 0.0
         else:
