@@ -1,0 +1,11 @@
+numpy
+matplotlib
+plotly>=5.0.0
+reverse_geocoder>=1.5.1
+scipy
+xarray
+pillow>=9.0.0
+requests
+jax>=0.4.20
+opensimplex>=0.4.3
+netCDF4>=1.6.4 

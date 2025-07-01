@@ -108,4 +108,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
+# ERA5 data
+era5_data.nc
+
 # End of file 
