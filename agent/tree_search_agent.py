@@ -177,7 +177,9 @@ class TreeSearchAgent:
 
         return new_state, balloon_env
 
-
+    def discretize_state(state, decimals=1):
+        return tuple(np.round(np.array(state), decimals=decimals))
+        
     def reconstruct_path(self, came_from: dict, current_state: tuple) -> np.ndarray:
         """
         Reconstruct the path from the current state to the initial state using the 'came_from' mapping.
@@ -251,6 +253,13 @@ class TreeSearchAgent:
         f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
         # We also need a lookup table from each state to a Balloon instance.
         state_to_balloon_env = {tuple(init_state): self.balloon_env}
+
+        # open_set = [self.discretize_state(init_state,decimals=1)]  # Open set of nodes to explore
+        # came_from = {self.discretize_state(init_state,decimals=1): (None, None)}
+        # g_score = {self.discretize_state(init_state,decimals=1): 0}
+        # f_score = {self.discretize_state(init_state,decimals=1): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        # state_to_balloon = {self.discretize_state(init_state,decimals=1): self.balloon_env.balloon}
+
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
@@ -278,7 +287,17 @@ class TreeSearchAgent:
                     state_to_balloon_env[tuple(child_state)] = child_state_balloon_env
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
-
+            # for action in self.get_possible_actions(current_state):
+            #     child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
+            #     child_state_disc = self.discretize_state(child_state)
+            #     tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
+            #     if tentative_g_score < g_score.get(child_state_disc, np.inf):
+            #         came_from[child_state_disc] = (current_state, action)
+            #         g_score[child_state_disc] = tentative_g_score
+            #         f_score[child_state_disc] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+            #         state_to_balloon[child_state_disc] = child_state_balloon
+            #         if child_state_disc not in open_set:
+            #             open_set.append(child_state_disc)
             # Increment iteration count and check for max iterations.
             it += 1
             print(f"Iteration {it}/{max_iterations}")
