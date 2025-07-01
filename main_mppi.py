@@ -55,8 +55,10 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     plt.plot(lons[0], lats[0], 'go', label='Start')
     plt.plot(lons[-1], lats[-1], 'ro', label='End')
     plt.plot(env.target_lon, env.target_lat, 'rx', label='Target End')
+    plt.ylim(40, 75)
+    plt.xlim(-100,-60)
     plt.grid(True)
-    plt.title('Balloon Trajectory')
+    plt.title(f'Balloon Trajectory in {max_steps} max steps')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.legend()
@@ -72,7 +74,7 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     plt.legend()
     
     plt.tight_layout()
-    plt.savefig('balloon_trajectory_and_altitude_std_6.png')
+    plt.savefig('balloon_trajectory_and_altitude_std_faster.png')
     plt.close()
 
     # 추가: Target velocity (action) vs. Current velocity, Resource 변화
@@ -99,7 +101,7 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig('balloon_velocity_and_resource_std_6.png')
+    plt.savefig('balloon_velocity_and_resource_std_faster.png')
     plt.close()
 
     return total_reward
@@ -110,11 +112,12 @@ def main():
     # 2. pick a reference start_time (should match your dataset's first valid_time)
     start_time = dt.datetime(2024, 7, 1, 0, 0)
     # Create environment and agent
+    #This is Ithaca
     initial_lat = 42.6
     initial_lon = -76.5
     initial_alt = 10.0
-    target_lat = 45
-    target_lon = -80
+    target_lat = 70
+    target_lon = -65
     max_steps = 50 #1/2 day
     time_step = 60
     noise_std = 1

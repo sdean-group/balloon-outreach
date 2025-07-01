@@ -129,26 +129,7 @@ class MPPIAgent:
         Returns:
             Total cost of the trajectory
         """
-        # Create a lightweight copy of the environment (reuses wind_field)
-        
-        env_copy = env.shallow_copy()
-        total_cost = 0.0
-        
-        # Rollout the control sequence
-        for t in range(min(self.horizon, len(control_seq))):
-            action = np.array([control_seq[t]])
-            
-            # Take step in environment
-            next_state, reward, done, _ = env_copy.step(action)
-            
-            # Accumulate cost (negative reward)
-            total_cost -= reward
-            
-            # Early termination if episode ends
-            if done:
-                break
-        
-        return total_cost
+        return env.rollout_sequence_mppi(control_seq, min(self.horizon, len(control_seq)))
     
     def _compute_weights(self, costs: np.ndarray) -> np.ndarray:
         """
@@ -224,38 +205,15 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         Returns:
             Total cost of the trajectory
         """
-        # Create a lightweight copy of the environment (reuses wind_field)
-        
-        env_copy = env.shallow_copy()
-        total_cost = 0.0
-        
-        # Rollout the control sequence
-        lat_diff = env.balloon.lat - self.target_lat
-        lon_diff = env.balloon.lon - self.target_lon
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        self.initial_goal_cost = distance
-        for t in range(min(self.horizon, len(vel_seq))):
-            action = np.array([vel_seq[t]])
-            acc = np.array([acc_seq[t]])
-            # Take step in environment
-            next_state, _, done, _ = env_copy.step(action)
-            # Custom cost function
-            cost = self._compute_step_cost(next_state, acc[0], t)
-            total_cost += cost
-            
-            # Early termination if episode ends
-            if done:
-                # Add penalty for early termination
-                total_cost += 1000.0
-                break
-        
-        return total_cost
+        return env.rollout_sequence_mppi(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost)
     
-    def _compute_step_cost(self, state: np.ndarray, acc: float, step: int) -> float:
+    def _compute_step_cost(self, target_state:np.ndarray, initial_goal_cost:float, state: np.ndarray, acc: float, step: int) -> float:
         """
         Compute cost for a single step.
         
         Args:
+            target_state: Target balloon state [target_lat, target_lon, target_alt]
+            initial_goal_cost: Euclidean distance to target point from current state
             state: Current state [lat, lon, alt, volume, sand, vel, time, ...]
             acc:  (vertical acceleration)
             step: Current step in the sequence
@@ -269,12 +227,14 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         volume_ratio, sand_ratio = state[3], state[4]
         
         # Distance to target
-        lat_diff = lat - self.target_lat
-        lon_diff = lon - self.target_lon
+        lat_diff = lat - target_state[0]
+        lon_diff = lon - target_state[1]
         distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        distance_cost = distance - self.initial_goal_cost
-        # Altitude deviation from target
-        alt_diff = abs(alt - self.target_alt)
+        distance_cost = distance - initial_goal_cost
+        # Altitude deviation from target. Deviation incurs more penalty if we are closer to target (encourages correct altitude near TARGET only)
+        #alt_diff = np.power(abs(alt - self.target_alt), -distance_cost)
+        # Altitude deviate from target.
+        alt_diff = np.power(abs(alt - target_state[2]), 2)
         
         # Resource penalty (encourage conservation)
         resource_penalty = 0.1 * (1.0 - volume_ratio) + 0.1 * (1.0 - sand_ratio)
@@ -287,7 +247,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         
         # Total cost
         cost = (w1*distance_cost + 
-                w2*(alt_diff)**2 + 
+                w2*alt_diff + 
                 w3*resource_penalty + 
                 w4*acc_penalty + 
                 w5*time_penalty)
