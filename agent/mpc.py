@@ -23,6 +23,8 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
     """Basic gradient descent with just a learning rate and also normalizing the gradient. Doing both the learning rate and normalization seemed to perform worse and take longer. High learning rates had power violations. Slower learning rates performed better than baseline but took more time (almost 4s)."""
     print(f"USING LEARNING RATE {alpha}, MAXITERS {max_iters}, ISNORMALIZED {isNormalized}")
     plan = initial_plan
+    alpha = 1
+    max_iters = 1
 
     for gradient_steps in range(max_iters):
 
@@ -30,10 +32,7 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
         print(f"lol {gradient_plan}")
 
         if  np.isnan(gradient_plan).any() or abs(np.linalg.norm(gradient_plan)) < 1e-7:
-            # print('Exiting early, |∂plan| =',abs(jnp.linalg.norm(dplan)))
             break
-        # print("A", gradient_steps, abs(jnp.linalg.norm(dplan)))
-        #plan -= dplan / jnp.linalg.norm(dplan)
         if isNormalized==1:
             plan -= alpha * gradient_plan / np.linalg.norm(gradient_plan)
         else:
@@ -44,13 +43,32 @@ def grad_descent_optimizer(initial_plan, balloon_env:BaseBalloonEnvironment, alp
 
 
 np.random.seed(seed=42)
-def get_initial_plans(balloon:Balloon, forecast:WindField, balloon_env:BaseBalloonEnvironment, num_plans, plan_steps, plan_type):
+def get_initial_plans(num_plans, plan_steps, plan_type):
     """ Returns an initial trajectory for the balloon.
 
         :param plan_steps: the length of the returned plan
         :param plan_type: the method used to generate the plan. Should be 'random', 'constant' (and later 'tree')
         """
-    
+
+    # should we make `num_plans` plans and average them?
+    if plan_type == 'random':
+        return np.random.uniform(low=-1.0, high=1.0, size=plan_steps)
+    elif plan_type == 'constant':
+        return np.zeros(plan_steps)
+    # TODO: add tree search below
+    else:
+        return np.zeros(plan_steps)
+
+
+
+
+def get_initial_plans2(balloon:Balloon, forecast:WindField, balloon_env:BaseBalloonEnvironment, num_plans, plan_steps, plan_type):
+    """ Returns an initial trajectory for the balloon.
+
+        :param plan_steps: the length of the returned plan
+        :param plan_type: the method used to generate the plan. Should be 'random', 'constant' (and later 'tree')
+        """
+    print(f'in initial plans, wind field is {forecast}')
     if plan_type == 'best_altitude':
 
         flight_record = {balloon.alt: 0}
@@ -114,8 +132,8 @@ def get_initial_plans(balloon:Balloon, forecast:WindField, balloon_env:BaseBallo
 
 
     res = np.array([])
+    # Creates multiple plans
     for _ in range(num_plans):
-        # should we make `num_plans` plans and average them?
         if plan_type == 'random':
             res = np.append(res, np.random.uniform(low=-1.0, high=1.0, size=plan_steps)) 
         elif plan_type == 'constant':
@@ -125,8 +143,28 @@ def get_initial_plans(balloon:Balloon, forecast:WindField, balloon_env:BaseBallo
         else:
             res = np.append(res, np.zeros(plan_steps))
     return np.reshape(res, (num_plans, plan_steps))
-    
+
 def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
+        """Returns the cost of a plan. The cost is calculated as the euclidean distance between the final state after executing the plan and the target state."""
+        #For implementing fly-as-far, could have it be the negative distance from the original starting point
+        cost = 0.0
+        horizon = 10
+
+        plan = sigmoid(plan)
+        target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
+        curr_balloon_env = copy.deepcopy(balloon_env)
+        print('starting cost rollout')
+        for i in range(min(len(plan), horizon)):
+            action = plan[i]
+            final_state,reward, done, reason = curr_balloon_env.step(action)
+            cost += np.linalg.norm(np.array(final_state[:3])- target_state)
+            if done:
+                print(f"In cost, reason for stopping: {reason}")
+                cost += 1000.0
+                break
+        return cost
+    
+def plan_cost_complex(plan, balloon_env: BaseBalloonEnvironment):
         """Returns the cost of a plan. The cost is calculated as the euclidean distance between the final state after executing the plan and the target state."""
         #For implementing fly-as-far, could have it be the negative distance from the original starting point
         cost = 0.0
@@ -148,39 +186,8 @@ def plan_cost(plan, balloon_env: BaseBalloonEnvironment):
         cost_deg = -np.dot((final_state - init_state), (target_state - init_state))
         alt_penalty = np.exp(abs(final_state[2] - target_state[2]))
         return cost
-    
-@partial(jax.jit, static_argnums=1)
-def jax_plan_cost(plan, balloon_env: BaseBalloonEnvironment):
-        """ Returns the cost of a plan. The cost is calculated as the *euclidean distance* (change to Haversine?) between the final state after executing the plan and the target state.
-        
-            :param plan: the series of actions to evaluate
-            :param balloon_env: a BaseBalloonEnvironment instance. This can be BalloonEnvironment or            BalloonERAEnvironment
-        """
-        #For implementing fly-as-far, could have it be the negative distance from the original starting point
-        cost = 0.0
 
-        plan = sigmoid(plan)
-        
-
-        # Make a new copy of the current balloon environment so stepping through the plan doesn't affect the actual environment
-        curr_balloon_env = copy.deepcopy(balloon_env)
-        def update_step(i, state):
-            action = plan[i]
-            # final_state contains the balloon state and the wind column
-            final_state, reward, done, reason = curr_balloon_env.step(action)
-            if done:
-                jax.debug.print(f"In cost, reason for stopping: {reason}")
-                i = len(plan)
-            return final_state
-        
-        final_state = jax.lax.fori_loop(0, len(plan), update_step, init_val=np.array([0.0,0.0,0.0]))
-        final_state = np.array(final_state[:3])
-        target_state = np.array([balloon_env.target_lat, balloon_env.target_lon, balloon_env.target_alt])
-        # Euclidean distance cost
-        cost = np.linalg.norm(final_state - target_state)
-        return cost
-
-def finite_difference_grad(plan, balloon_env, epsilon=100, sigma=1.0, alpha=1.0):
+def finite_difference_grad(plan, balloon_env, epsilon=1e-4, sigma=1.0, alpha=1.0):
     # takes a while
     grad = np.zeros_like(plan)
     
@@ -189,7 +196,7 @@ def finite_difference_grad(plan, balloon_env, epsilon=100, sigma=1.0, alpha=1.0)
     
     
     for i in range(len(plan)):
-        if i < 5:
+        if i < 10:
             v = np.random.normal(0,sigma)
             plan_up = plan.copy()
             plan_down = plan.copy()
@@ -201,15 +208,9 @@ def finite_difference_grad(plan, balloon_env, epsilon=100, sigma=1.0, alpha=1.0)
             grad[i] = ((cost_up - cost_down) *v * alpha) / (2 * epsilon)
             #print(f"costup {cost_up}, costdown{cost_down}, grad{grad[i]}")
         else:
-            grad[i] = grad[4]
+            grad[i] = grad[9]
 
     return grad
-
-@partial(jax.jit, static_argnums=1)
-@partial(jax.grad, argnums=0)
-def get_dplan(plan, balloon_env: BaseBalloonEnvironment):
-     # jax.debug.print("{balloon}, {wind_field}, {atmosphere}, {terminal_cost_fn}, {time_delta}, {stride}", balloon=balloon, wind_field=wind_field, atmosphere=atmosphere, terminal_cost_fn=terminal_cost_fn, time_delta=time_delta, stride=stride)
-    return plan_cost(plan, balloon_env)
 
 class MPCAgent:
     """
@@ -233,7 +234,7 @@ class MPCAgent:
             print("No environment provided. Initialization failed.")
             return
         self.control_horizon = control_horizon
-        #1 step= 30min so 240 steps is 12 hrs
+        #1 step= 1 min
         self.plan_time = 2*24*60*60
         self.time_delta = 3*60
 
@@ -250,10 +251,6 @@ class MPCAgent:
         """ Calculates the current position of a moving object by using a previously determined position, and incorporating estimates of speed, heading, and elapsed time.
         An observation is a state. it has balloon_obersvation and wind information. we use ob_t and MPC predicts a_t which then gives us ob_t+1
         """
-        balloon:Balloon = self.balloon_env.balloon
-        pressure = balloon.altitude_to_pressure(balloon.alt)
-        wind_vector = self.wind_field.get_wind(balloon.lon, balloon.lat, pressure, self.balloon_env.current_time)
-
         # print(self.balloon.state.time_elapsed/3600.0)
         action = self.plan[self.i]
         state, reward, done, reason = self.balloon_env.step(action)
@@ -261,18 +258,10 @@ class MPCAgent:
         #could keep track of steps taken towards target/away from init location
 
     def begin_episode(self, state: np.ndarray, max_steps:int) -> int:        
-        #print('USING ' + initialization_type + ' INITIALIZATION')
-        initial_plans = get_initial_plans(self.balloon_env.balloon,self.balloon_env.wind_field, self.balloon_env, 10, max_steps, 'best_altitude')
-        
+        print('INITIALIZATION')
+        initial_plan = get_initial_plans(10, max_steps, 'random')
+        min_value_so_far = plan_cost(initial_plan, self.balloon_env)
             
-        batched_cost = []
-        for i in range(len(initial_plans)):
-            batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
-        
-        min_index_so_far = np.argmin(batched_cost)
-        min_value_so_far = batched_cost[min_index_so_far]
-
-        initial_plan = initial_plans[min_index_so_far]
  
         if self.plan is not None and plan_cost(self.plan, self.balloon_env) < min_value_so_far:
             print('Using the previous optimized plan as initial plan')
@@ -285,37 +274,61 @@ class MPCAgent:
 
         b4 = time.time()       
         start_cost = plan_cost(initial_plan,self.balloon_env)
-        plan,step= grad_descent_optimizer(initial_plan, self.balloon_env)
+        optimized_plan,step= grad_descent_optimizer(initial_plan, self.balloon_env)
 
-        after_cost = plan_cost(plan, self.balloon_env)
+        after_cost = plan_cost(optimized_plan, self.balloon_env)
         print(f"Gradient descent optimizer, {step}, ∆cost = {after_cost} - {start_cost} = {after_cost - start_cost}")
-        print(plan[:15])
+        print(optimized_plan[:15])
         # Ensuring actions are between [-1,1]
-        self.plan = sigmoid(plan)
+        optimized_plan = sigmoid(optimized_plan)
         after = time.time()
-        print(after - b4, 's to get optimized plan')
-        
+        print(after - b4, 's to get optimized plan')       
 
         self.i = 0
 
-        b4 = time.time()
-        self._deadreckon()
+        vertical_velocity = copy.deepcopy(self.balloon_env.balloon.vertical_velocity)
+        self.plan = np.roll(optimized_plan, -1)
+        self.plan[-1] = optimized_plan[0]
 
-        action = self.plan[self.i]
+        
+        self._deadreckon()
+        action = np.array([vertical_velocity + optimized_plan[0]])
+        #action = optimized_plan[0]
+        #print(f"plan is {self.plan}")
+        #action = self.plan[self.i]
         return action.item()
+    
+    def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
+        """
+        Check if the current state is the goal state.
+
+        Args:
+            state: Current state of the environment as a numpy array [lat, lon, alt, t]
+        
+        Returns:
+            True if the current state matches the target state within a tolerance, False otherwise.
+        """
+        return (np.isclose(state[0], self.target_lat, atol=atols[0]) and
+                np.isclose(state[1], self.target_lon, atol=atols[1]) and
+                np.isclose(state[2], self.target_alt, atol=atols[2]))
+
 
 
     def select_action(self, state: np.ndarray, max_steps:int, step:int) -> int:
         self.i+=1
-        if self.plan is None:
-            initial_plans = get_initial_plans(self.balloon_env.balloon,self.balloon_env.wind_field, self.balloon_env, 10, max_steps, 'best_altitude')
-            batched_cost = []
-            for i in range(len(initial_plans)):
-                batched_cost.append(plan_cost(initial_plans[i], self.balloon_env))
-        
-            min_index_so_far = np.argmin(batched_cost)
 
-            self.plan = initial_plans[min_index_so_far]
+        lat_long_atol = 1e-2  # 0.01 degrees in latitude/longitude.
+        alt_atol = 0.02  # 20 cm in altitude.
+        if (self.is_goal_state(state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol]))):
+            print(f"reached target state, break main loop")
+            return 0.0
+        
+        if self.plan is None:
+            print(f"no plan yet")
+            initial_plan = get_initial_plans(10, max_steps, 'random')
+
+            self.plan = initial_plan
+            print(f"plan is {self.plan}")
             action = self.plan[self.i]
             # print('action', action)
             return action.item()
@@ -326,12 +339,13 @@ class MPCAgent:
             # Padding random actions after the planning horizon
             random_plan = np.random.uniform(-0.3,0.3,(N,))
             self.plan = inverse_sigmoid(np.hstack((self.plan[N:], random_plan)))
-            hi = self.begin_episode(state, max_steps)
-            return hi
+            return self.begin_episode(state, max_steps)
         else:
             # print('not replanning')
             self._deadreckon()
+            action = np.array([self.balloon_env.balloon.vertical_velocity + self.plan[self.i]])
             action = self.plan[self.i]
+            #print(f"plan is {self.plan}")
             # print('action', action)
             return action.item()
  
