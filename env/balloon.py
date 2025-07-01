@@ -46,6 +46,43 @@ class Balloon:
         self.initial_helium_mass = self.helium_density * max_volume
         self.helium_mass = self.helium_density * max_volume
 
+    def clone_state(self):
+        new_balloon = Balloon.__new__(Balloon)
+        # === Copy mutable state ===
+        new_balloon.lat = self.lat
+        new_balloon.lon = self.lon
+        new_balloon.alt = self.alt
+        new_balloon.volume = self.volume
+        new_balloon.sand = self.sand
+        new_balloon.vertical_velocity = self.vertical_velocity
+        new_balloon.pressure_pre = self.pressure_pre
+        new_balloon.temperature = self.temperature
+        new_balloon.helium_mass = self.helium_mass
+
+        # === Copy constants and physical parameters ===
+        new_balloon.max_volume = self.max_volume
+        new_balloon.max_sand = self.max_sand
+        new_balloon.initial_helium_mass = self.initial_helium_mass
+        new_balloon.max_vent_rate = self.max_vent_rate
+        new_balloon.max_sand_rate = self.max_sand_rate
+        new_balloon.max_velocity = self.max_velocity
+
+        # === Copy constants ===
+        new_balloon.EARTH_RADIUS = self.EARTH_RADIUS
+        new_balloon.DEG_TO_RAD = self.DEG_TO_RAD
+        new_balloon.balloon_mass = self.balloon_mass
+        new_balloon.helium_density = self.helium_density
+        new_balloon.air_density0 = self.air_density0
+        new_balloon.gravity = self.gravity
+        new_balloon.T0 = self.T0
+        new_balloon.L = self.L
+        new_balloon.R = self.R
+        new_balloon.R_u = self.R_u
+        new_balloon.helium_molar_mass = self.helium_molar_mass
+        new_balloon.air_molar_mass = self.air_molar_mass
+        new_balloon.P0 = self.P0
+        return new_balloon
+
     def get_air_density(self, altitude: float) -> float:
         return self.air_density0 * np.exp(-altitude / 7000.0)
 
@@ -89,8 +126,10 @@ class Balloon:
             F_current = buoyancy - weight + drag
 
             velocity_error = v_target - v_current
-            #print(f"vel_error {velocity_error}, vert vel {self.vertical_velocity}")
-            velocity_error_rate = (velocity_error - vel_error_prev) / delta_t
+            if np.isfinite(vel_error_prev):
+                velocity_error_rate = (velocity_error - vel_error_prev) / delta_t
+            else:
+                velocity_error_rate = 0.0
             vel_error_integral += velocity_error * delta_t
             vel_error_integral = np.clip(vel_error_integral, -10.0, 10.0)
 
@@ -134,6 +173,7 @@ class Balloon:
 
             acceleration = (net_force + drag_force) / total_mass
             v_current += acceleration * delta_t
+            v_current = np.clip(v_current, -self.max_velocity, self.max_velocity)
             alt_current += v_current * delta_t / 1000
             alt_current = np.clip(alt_current, 5.0, 25.0)
 
@@ -145,9 +185,8 @@ class Balloon:
         total_dMass = initial_mass - self.helium_mass
         total_dSand = initial_sand - self.sand
         self.alt = alt_current
-        v_current = np.clip(v_current, -self.max_velocity, self.max_velocity)
-        if v_current < -1e100:
-            v_current = 0.0
+        # if v_current < -1e100:
+        #     v_current = 0.0
         #print(f"vcurrent{v_current}")
         self.vertical_velocity = v_current
         return total_dMass, total_dSand
@@ -155,6 +194,8 @@ class Balloon:
     def drag_force(self, pressure: float, net_force: float, vel: float = None):
         if vel is None:
             vel = self.vertical_velocity
+        if not np.isfinite(vel) or not np.isfinite(pressure):
+            return 0.0
         cross_section = np.pi * (3 * self.volume / (4 * np.pi)) ** (2/3)
         rho_air = (pressure * 100) / (self.R * self.temperature)
         kinematic_viscosity = 1.5e-5 * (self.P0 / pressure)
@@ -172,8 +213,6 @@ class Balloon:
             drag_coefficient = 0.47
 
         drag_coefficient *= (1 + 0.05 * (self.alt / 10))
-
-#add nan check here?
         if abs(vel) < 1e-6:
             drag_force = 0.0
         else:

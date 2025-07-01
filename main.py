@@ -3,8 +3,7 @@ from env.balloon_env import BalloonEnvironment
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
 from agent.tree_search_agent import TreeSearchAgent
-from agent.mpc import MPCAgent
-from agent.mppi import MPPIAgent
+from agent.mppi_agent import MPPIAgent
 import matplotlib.pyplot as plt
 
 def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 100) -> float:

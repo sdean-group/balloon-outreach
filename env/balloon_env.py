@@ -7,6 +7,7 @@ from env.ERA_wind_field import WindField as ERAWindField, WindVector as ERAWindV
 from env.balloon import Balloon
 import xarray as xr
 import datetime as dt
+import copy
 
       
 class BaseBalloonEnvironment:
@@ -102,9 +103,10 @@ class BalloonEnvironment(BaseBalloonEnvironment):
 
 class BalloonERAEnvironment(BaseBalloonEnvironment):
     """Environment for balloon navigation using ERA5 wind field"""
-    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, viz = True):
-        balloon = Balloon(initial_lat=0.0, initial_lon=0.0, initial_alt=10.0)
-        super().__init__(balloon=balloon, dt=60, target_lat=500, target_lon=-100, target_alt=12)
+    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, initial_lat: float = 0.0, initial_lon: float = 0.0, initial_alt: float = 10.0, target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, dt=60, viz = True):
+        # balloon = Balloon(initial_lat=42.6, initial_lon=-76.5, initial_alt=10.0)
+        balloon = Balloon(initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt)
+        super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt)
         self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed)
         self.ds = ds
         self.start_time = start_time
@@ -117,7 +119,29 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
             self.ax3 = self.fig.add_subplot(133)  # Wind profile plot
             plt.tight_layout()
 
-
+    def shallow_copy(self):
+        
+        new_env = BalloonERAEnvironment.__new__(BalloonERAEnvironment)
+        new_env.balloon = self.balloon.clone_state()
+        new_env.dt = self.dt
+        new_env.target_lat = self.target_lat
+        new_env.target_lon = self.target_lon
+        new_env.target_alt = self.target_alt
+        new_env.current_time = self.current_time
+        new_env.trajectory = copy.deepcopy(self.trajectory)
+        new_env.wind_field = self.wind_field  # re-use
+        new_env.ds = self.ds  # re-use
+        new_env.start_time = self.start_time  # re-use
+        new_env.noise_seed = self.noise_seed  # re-use
+        new_env.viz = self.viz
+        if self.viz:
+        # Re-use figure handles if needed, or disable for rollouts
+            new_env.fig = self.fig
+            new_env.ax1 = self.ax1
+            new_env.ax2 = self.ax2
+            new_env.ax3 = self.ax3
+        return new_env
+        
 
     def render(self) -> None:
         if self.viz:
