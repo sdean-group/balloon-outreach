@@ -474,7 +474,6 @@ if __name__=="__main__":
     # Case 4: Test A* with BalloonERAEnvironment.
     test_era()
 
-
 def test_discretization():
     """
     Test the improved discretization function to demonstrate its clarity and functionality.
@@ -534,7 +533,6 @@ if __name__=="__main__":
 
     # Test the improved discretization function
     test_discretization()
-
     # Expected outputs from Cases 1-3:
     # ------ Case 1: Initial state = target state ---
     # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), None)]
