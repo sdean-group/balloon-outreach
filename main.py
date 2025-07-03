@@ -1,10 +1,15 @@
 import numpy as np
 from env.balloon_env import BalloonEnvironment
+from env.visualize import plot_trajectory_earth
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
 from agent.tree_search_agent import TreeSearchAgent
 from agent.mppi_agent import MPPIAgent
 import matplotlib.pyplot as plt
+import env as env_pkg  # module reference for locating data files
+from pathlib import Path
+import sys
+import importlib.resources as pkg_resources
 
 def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 100) -> float:
     """Run one episode with the given agent"""
@@ -26,11 +31,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
         # Store position and altitude
         trajectory.append((state[0], state[1]))
         altitudes.append(state[2])
-        print(f"Step {step}: lat: {state[0]:.2f}, lon: {state[1]:.2f}, alt: {state[2]:.2f}")
-        
-        # Render every 2 hours
-        # if step % 2 == 0:
-        env.render()
+        # print(f"Step {step}: lat: {state[0]:.2f}, lon: {state[1]:.2f}, alt: {state[2]:.2f}")
         
         if done:
             print(f"\nEpisode terminated: {info}")
@@ -63,7 +64,25 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     
     plt.tight_layout()
     plt.show()
-    
+
+    # Robustly locate the texture image. Works for both namespace packages and local runs.
+    try:
+        texture_path = pkg_resources.files("env").joinpath("figs/2k_earth_daymap.jpg")
+    except Exception:
+        texture_path = Path(__file__).resolve().parent / "env" / "figs" / "2k_earth_daymap.jpg"
+
+    try:
+        plot_trajectory_earth(
+            lats,
+            lons,
+            altitudes,
+            texture_path=str(texture_path),
+            lon_offset_deg=210,
+            flip_lat=True,
+        )
+    except Exception as e:
+        print(f"Plotly 3D visualization failed: {e}")
+
     return total_reward
 
 def main():

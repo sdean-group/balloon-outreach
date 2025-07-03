@@ -7,6 +7,10 @@ from env.balloon_env import BalloonERAEnvironment
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
 import matplotlib.pyplot as plt
+from env.visualize import plot_wind_field, plot_trajectory_earth
+from pathlib import Path
+import sys
+import importlib.resources as pkg_resources
 
 def run_episode(env: BalloonERAEnvironment, agent: RandomAgent, max_steps: int = 100) -> float:
     """Run one episode with the given agent"""
@@ -39,8 +43,6 @@ def run_episode(env: BalloonERAEnvironment, agent: RandomAgent, max_steps: int =
         trajectory.append((state[0], state[1]))
         altitudes.append(state[2])
         print(f"Step {step}: lat: {state[0]:.2f}, lon: {state[1]:.2f}, alt: {state[2]:.2f}")
-        
-        # env.render()
         
         if done:
             print(f"\nEpisode terminated: {info}")
@@ -100,6 +102,22 @@ def run_episode(env: BalloonERAEnvironment, agent: RandomAgent, max_steps: int =
     plt.savefig('balloon_velocity_and_resource.png')
     plt.close()
 
+    # # Wind field visualization
+    # pressure_levels = [1000, 500, 200]  # hPa
+    # times = [0, 12]  # hours
+    
+    # for p in pressure_levels:
+    #     for t in times:
+    #         plot_wind_field(env.wind_field, p, t)
+    # plt.savefig(f'wind_field.png')
+    # plt.close()
+
+    # 3D visualization – robust texture path resolution
+    try:
+        texture_path = pkg_resources.files("env").joinpath("figs/2k_earth_daymap.jpg")
+    except Exception:
+        texture_path = Path(__file__).resolve().parent / "env" / "figs" / "2k_earth_daymap.jpg"
+    plot_trajectory_earth(lats, lons, altitudes, texture_path=str(texture_path), lon_offset_deg=210, flip_lat=True)
     return total_reward
 
 def main():
