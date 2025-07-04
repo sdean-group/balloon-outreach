@@ -1,12 +1,12 @@
 import numpy as np
 from env.balloon_env import BalloonERAEnvironment
-from agent.mppi_agent import MPPIAgentWithCostFunction
+from agent.mppi_agent import MPPIAgentWithCostFunction, MPPIAgent
 import matplotlib.pyplot as plt
 import xarray as xr
 import datetime as dt   
 import time
 
-def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> float:
+def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 100) -> float:
     """Run one episode with the given agent"""
     state = env.reset()
     total_reward = 0
@@ -20,14 +20,18 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     velocities = []
     helium_mass = []
     sands = []
+    avg_opt_time = 0
 
     for step in range(max_steps):
+        start = time.time()
         # Get action from agent
         action = agent.select_action(state, env)
+        end = time.time()
         # Take step
         print(f"action: {action}, vertical_velocity: {env.balloon.vertical_velocity}")
         state, reward, done, info = env.step(action)
         total_reward += reward
+        avg_opt_time += end-start
         
         actions.append(float(action[0]) if isinstance(action, np.ndarray) else float(action))
         velocities.append(env.balloon.vertical_velocity)
@@ -43,8 +47,10 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
         
         if done:
             print(f"\nEpisode terminated: {info}")
-            break
-    
+            avg_opt_time /= step+1
+            break  
+    avg_opt_time /= max_steps
+    print(f"Average time to get one action: {avg_opt_time}") 
     # Plot final trajectory
     plt.figure(figsize=(12, 5))
     
@@ -54,9 +60,8 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     plt.plot(lons, lats, 'b-', alpha=0.5)
     plt.plot(lons[0], lats[0], 'go', label='Start')
     plt.plot(lons[-1], lats[-1], 'ro', label='End')
-    plt.plot(env.target_lon, env.target_lat, 'rx', label='Target End')
-    plt.ylim(40, 75)
-    plt.xlim(-100,-60)
+    if agent.objective == 'target':
+        plt.plot(env.target_lon, env.target_lat, 'rx', label='Target End')
     plt.grid(True)
     plt.title(f'Balloon Trajectory in {max_steps} max steps')
     plt.xlabel('Longitude')
@@ -66,15 +71,16 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     # Altitude plot
     plt.subplot(1, 2, 2)
     plt.plot(altitudes, 'b-')
-    plt.axhline(y=env.target_alt,linewidth=1, color='r', label='Target End Altitude')
+    if agent.objective == 'target':
+        plt.axhline(y=env.target_alt,linewidth=1, color='r', label='Target End Altitude')
     plt.grid(True)
-    plt.title('Altitude Profile')
+    plt.title(f'Altitude Profile using {env.dt} delta_time')
     plt.xlabel('Time Step')
     plt.ylabel('Altitude (km)')
     plt.legend()
     
     plt.tight_layout()
-    plt.savefig('balloon_trajectory_and_altitude_std_faster.png')
+    plt.savefig('balloon_trajectory_and_altitude_test3.png')
     plt.close()
 
     # 추가: Target velocity (action) vs. Current velocity, Resource 변화
@@ -101,7 +107,7 @@ def run_episode(env: BalloonERAEnvironment, agent, max_steps: int = 100) -> floa
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig('balloon_velocity_and_resource_std_faster.png')
+    plt.savefig('balloon_velocity_and_resource_test3.png')
     plt.close()
 
     return total_reward
@@ -111,19 +117,20 @@ def main():
     ds = xr.open_dataset("era5_data.nc", engine="netcdf4")
     # 2. pick a reference start_time (should match your dataset's first valid_time)
     start_time = dt.datetime(2024, 7, 1, 0, 0)
-    # Create environment and agent
+
     #This is Ithaca
     initial_lat = 42.6
     initial_lon = -76.5
     initial_alt = 10.0
     target_lat = 70
-    target_lon = -65
-    max_steps = 50 #1/2 day
-    time_step = 60
+    target_lon = -90
+    target_alt = 12.0
+    max_steps = 1440 #1 day for 60 minutes
+    time_step = 120 #120 minutes
     noise_std = 1
-    env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon, dt=time_step)
-    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, num_samples=10, noise_std=noise_std )
-    # agent = GoalDirectedAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
+    env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, dt=time_step)
+    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=10, noise_std=noise_std, num_iterations=1, horizon=1, objective='target')
+    
     # Run one episode
     start = time.time()
     reward = run_episode(env, agent, max_steps=max_steps)

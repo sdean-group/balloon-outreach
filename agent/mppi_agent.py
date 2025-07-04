@@ -19,7 +19,8 @@ class MPPIAgent:
                  noise_std: float = 1,
                  acc_bounds: Tuple[float, float] = (-0.5, 0.5),
                  vel_bounds: Tuple[float, float] = (-1.0, 1.0),
-                 visualize: bool = False):
+                 visualize: bool = False,
+                 objective:str = 'target'):
         """
         Initialize MPPI agent.
         
@@ -29,7 +30,10 @@ class MPPIAgent:
             num_iterations: Number of times to update optimal control sequence
             temperature: Temperature parameter for trajectory weighting (β in exp(-β*S))
             noise_std: Standard deviation of noise for control sampling
-            action_bounds: (min_action, max_action) for vertical velocity control
+            acc_bounds: (min_amt, max_amt) for acceleration control
+            vel_bounds: (min_action, max_action) for vertical velocity control
+            visualize: Whether or not to visualize planned trajectories
+            objective: Should either be 'target' or 'fly'. Indicates which task the agent is completing
         """
         self.horizon = horizon
         self.num_samples = num_samples
@@ -39,6 +43,7 @@ class MPPIAgent:
         self.acc_bounds = acc_bounds
         self.vel_bounds = vel_bounds
         self.visualize = visualize
+        self.objective = objective
         
         # Initialize control sequence (all zeros initially)
         self.control_sequence = np.zeros(horizon)
@@ -54,8 +59,11 @@ class MPPIAgent:
         Returns:
             Optimal action as numpy array
         """
+        if (self.objective == 'fly'):
+                self.temperature = 1
         for _ in range(self.num_iterations):
             # Sample control sequences
+            
             self.vertical_velocity = env.balloon.vertical_velocity
             acc_samples, vel_samples = self._sample_control_sequences()
             
@@ -139,20 +147,24 @@ class MPPIAgent:
     
     
     def _evaluate_control_sequence(self, acc_seq: np.ndarray, control_seq: np.ndarray, 
-                                 initial_state: np.ndarray, env:BaseBalloonEnvironment, visualize:bool=False) -> Tuple[float, List[float]]:
+                                 initial_state: np.ndarray, env:BaseBalloonEnvironment) -> Tuple[float, List[float]]:
         """
         Evaluate a control sequence by rolling it out through the environment.
         
         Args:
-            acc_seq: Sequence of changes in velocity
+            acc_seq: Sequence of changes in velocity (unused)
             control_seq: Control sequence to evaluate
-            initial_state: Initial state of the environment
+            initial_state: Initial state of the environment (unused)
             env: Environment instance
             
         Returns:
             Total cost of the trajectory, trajectory
         """
-        return env.rollout_sequence_mppi(control_seq, min(self.horizon, len(control_seq)))
+        if self.objective == 'target':
+            return env.rollout_sequence_mppi_target(control_seq, min(self.horizon, len(control_seq)))
+        else:
+            return env.rollout_sequence_mppi_fly(control_seq,  min(self.horizon, len(control_seq)))
+
     
     def _compute_weights(self, costs: np.ndarray) -> np.ndarray:
         """
@@ -194,7 +206,7 @@ class MPPIAgent:
         plt.legend()
         
         plt.tight_layout()
-        plt.savefig('yippee.png')
+        plt.savefig('trajectory.png')
         plt.show()
         plt.close()
     
@@ -210,16 +222,17 @@ class MPPIAgentWithCostFunction(MPPIAgent):
     
     def __init__(self, 
                  horizon: int = 1,
-                 num_samples: int = 100,
+                 num_samples: int = 10,
                  num_iterations:int = 1,
-                 temperature: float = 1.0,
+                 temperature: float = 10,
                  noise_std: float = 0.1,
-                 acc_bounds: Tuple[float, float] = (-0.5, 0.5),
+                 acc_bounds: Tuple[float, float] = (-0.1, 0.1),
                  vel_bounds: Tuple[float, float] = (-1.0, 1.0),
                  target_lat: float = 500.0,
                  target_lon: float = -100.0,
                  target_alt: float = 12.0,
-                 visualize: bool = False):
+                 visualize: bool = False,
+                 objective:str = 'target'):
         """
         Initialize MPPI agent with custom cost function.
         
@@ -233,8 +246,10 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             target_lat: Target latitude
             target_lon: Target longitude
             target_alt: Target altitude
+            visualize: Whether or not to visualize planned trajectories
+            objective: Should either be 'target' or 'fly'. Indicates which task the agent is completing
         """
-        super().__init__(horizon, num_samples, num_iterations, temperature, noise_std, acc_bounds, vel_bounds, visualize)
+        super().__init__(horizon, num_samples, num_iterations, temperature, noise_std, acc_bounds, vel_bounds, visualize,objective)
         self.target_lat = target_lat
         self.target_lon = target_lon
         self.target_alt = target_alt
@@ -256,11 +271,28 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         Returns:
             Total cost of the trajectory, trajectory
         """
-        return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost)
+        if self.objective == 'target':
+            target_state = np.array([env.target_lat, env.target_lon, env.target_alt])
+            lat_diff = env.balloon.lat - env.target_lat
+            lon_diff = env.balloon.lon - env.target_lon
+            initial_goal_cost = np.sqrt(lat_diff**2 + lon_diff**2)
+            return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target, target_state, initial_goal_cost)
+        else:
+            cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
+            # Discourage looping
+            backward_penalty = 0
+            for lat,lon in trajectory:
+                prev_dx = lon - env.balloon.lon
+                prev_dy = lat - env.balloon.lat
+                prev_r = np.sqrt(prev_dx**2 + prev_dy**2)
+                dr = cost - prev_r
+            # Penalize backward motion
+                backward_penalty += -min(0, dr)  # Only nonzero if dr < 0
+            return cost + 10*backward_penalty, trajectory
     
-    def _compute_step_cost(self, target_state:np.ndarray, initial_goal_cost:float, state: np.ndarray, acc: float, step: int) -> float:
+    def _compute_step_cost_target(self, target_state:np.ndarray, initial_goal_cost:float, state: np.ndarray, acc: float, step: int) -> float:
         """
-        Compute cost for a single step.
+        Compute cost for a single step with the target objective.
         
         Args:
             target_state: Target balloon state [target_lat, target_lon, target_alt]
@@ -273,7 +305,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             Cost for this step
         """
         # Extract state components
-        w1,w2,w3,w4,w5 = 30,25,1,1,1
+        w1,w2,w3,w4,w5 = 30,15,1,5,1
         lat, lon, alt = state[0], state[1], state[2]
         volume_ratio, sand_ratio = state[3], state[4]
         
@@ -297,6 +329,51 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         
         # Total cost
         cost = (w1*distance_cost + 
+                w2*alt_diff + 
+                w3*resource_penalty + 
+                w4*acc_penalty + 
+                w5*time_penalty)
+        
+        return cost
+    
+    def _compute_step_cost_fly(self, init_state:np.ndarray, state: np.ndarray, acc: float, step: int) -> float:
+        """
+        Compute cost for a single step with the fly as far objective.
+        
+        Args:
+            init_state: Initial balloon state [init_lat, init_lon, init_alt]
+            initial_goal_cost: Euclidean distance to target point from current state
+            state: Current state [lat, lon, alt, volume, sand, vel, time, ...]
+            acc:  (vertical acceleration)
+            step: Current step in the sequence
+            
+        Returns:
+            Cost for this step
+        """
+        # Extract state components
+        w1,w2,w3,w4,w5 = -50,0,1,1,5
+        lat, lon, alt = state[0], state[1], state[2]
+        volume_ratio, sand_ratio = state[3], state[4]
+        
+        
+        # Encourage distance away from init to target
+        lat_diff = lat - init_state[0]
+        lon_diff = lon - init_state[1]
+        distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        # Encourage altitude deviation from target. 
+        alt_diff = (alt - init_state[2])**2
+        
+        # Resource penalty (encourage conservation)
+        resource_penalty = 0.1 * (1.0 - volume_ratio) + 0.1 * (1.0 - sand_ratio)
+        
+        # Action penalty (encourage smooth control)
+        acc_penalty = acc**2
+        
+        # Time penalty (encourage efficiency)
+        time_penalty = 0.01 * step
+        
+        # Total cost
+        cost = (w1*distance + 
                 w2*alt_diff + 
                 w3*resource_penalty + 
                 w4*acc_penalty + 

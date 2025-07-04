@@ -13,6 +13,7 @@ import copy
 class BaseBalloonEnvironment:
     def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
         self.balloon = balloon
+        self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt])
         self.dt = dt
         self.target_lat = target_lat
         self.target_lon = target_lon
@@ -91,9 +92,9 @@ class BaseBalloonEnvironment:
         distance = np.sqrt(lat_diff**2 + lon_diff**2)
         return -distance
     
-    def rollout_sequence_mppi(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
+    def rollout_sequence_mppi_target(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
         """
-        Executes a sequence of control steps in the environment. Resets environment to initial state before returning.
+        Executes a sequence of control steps in the environment with the target objective. Resets environment to initial state before returning.
         Args:
             control_seq: Control sequence to evaluate
             max_steps: Maximum amount of iterations to step through
@@ -144,15 +145,13 @@ class BaseBalloonEnvironment:
         self.current_time = current_time
         
         return total_cost, trajectory
-
-    def rollout_sequence_mppi_with_cost(self,vel_seq:np.ndarray, acc_seq:np.ndarray, max_steps:int, cost_fcn) -> Tuple[float, List[float]]:
+    
+    def rollout_sequence_mppi_fly(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
         """
-        Executes a sequence of control steps in the environment with a more complex cost function. Resets environment to initial state before returning.
+        Executes a sequence of control steps in the environment with the fly as far objective. Resets environment to initial state before returning.
         Args:
-            vel_seq: Array of planned velocities.
-            acc_seq: Array of planned accelerations.
+            control_seq: Control sequence to evaluate
             max_steps: Maximum amount of iterations to step through
-            cost_fcn: If `cost_fcn` does not have the same parameters as `_compute_step_cost` from MPPIAgentWithCostFunction, modify function call inside this function.
 
         Returns:
             Total cost of trajectory, trajectory
@@ -172,29 +171,22 @@ class BaseBalloonEnvironment:
         # Rollout the control sequence
         total_cost = 0.0
         trajectory = []
-        target_state = [self.target_lat, self.target_lon, self.target_alt]
-        lat_diff = lat - self.target_lat
-        lon_diff = lon - self.target_lon
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        initial_goal_cost = distance
+        # Rollout the control sequence
         for t in range(max_steps):
-            # Casting action and acc from scalars to arrays
-            action = np.array([vel_seq[t]])
-            acc = np.array([acc_seq[t]])
+            action = np.array([control_seq[t]])
+            
             # Take step in environment
-            next_state, _, done, _ = self.step(action)
-            trajectory.append((next_state[0], next_state[1]))
-            # Custom cost function
-            cost = cost_fcn(target_state, initial_goal_cost, next_state, acc[0], t)
-            total_cost += cost
+            state, reward, done, _ = self.step(action)
+            trajectory.append((state[0], state[1]))
+            
+            # Accumulate cost (euclidean distance from current point and initial point)
+            total_cost -= np.linalg.norm(state[:3] - self.init_state)
             
             # Early termination if episode ends
             if done:
-                # Add penalty for early termination
-                total_cost += 1000.0
                 break
+
         # Reset states
-        print(f"Alt before: {alt}, Alt after: {self.balloon.alt}")
         self.balloon.alt = alt
         self.balloon.lon = lon
         self.balloon.lat = lat
@@ -206,6 +198,65 @@ class BaseBalloonEnvironment:
         self.balloon.sand = sand
         self.current_time = current_time
         
+        return total_cost, trajectory
+
+    def rollout_sequence_mppi_with_cost(self,vel_seq:np.ndarray, acc_seq:np.ndarray, max_steps:int, cost_fcn, *params) -> Tuple[float, List[float]]:
+        """
+        Executes a sequence of control steps in the environment with a more complex cost function. The cost function should handle the target or fly as far objective. Resets environment to initial state before returning.
+        Args:
+            vel_seq: Array of planned velocities.
+            acc_seq: Array of planned accelerations.
+            max_steps: Maximum amount of iterations to step through
+            cost_fcn: `cost_fcn` can have any arguments, but must end with next_state (np.ndarray), acceleration(float), timestep(int)
+            *params: Any additional arguments that cost_fcn takes
+
+        Returns:
+            Total cost of trajectory, trajectory
+        """
+        # Saving initial states before stepping
+        alt = self.balloon.alt
+        lon = self.balloon.lon
+        lat = self.balloon.lat
+        temperature = self.balloon.temperature
+        vertical_velocity = self.balloon.vertical_velocity
+        volume = self.balloon.volume
+        helium_density = self.balloon.helium_density
+        helium_mass = self.balloon.helium_mass
+        sand = self.balloon.sand
+        current_time = self.current_time
+
+        # Rollout the control sequence
+        total_cost = 0.0
+        trajectory = []
+
+        for t in range(max_steps):
+            # Casting action and acc from scalars to arrays
+            action = np.array([vel_seq[t]])
+            acc = np.array([acc_seq[t]])
+            # Take step in environment
+            next_state, _, done, _ = self.step(action)
+            trajectory.append((next_state[0], next_state[1]))
+            # Custom cost function
+            cost = cost_fcn(*params, next_state, acc[0], t)
+            total_cost += cost
+            
+            # Early termination if episode ends
+            if done:
+                # Add penalty for early termination
+                total_cost += 1000.0
+                break
+        # Reset states
+        #print(f"Alt before: {alt}, Alt after: {self.balloon.alt}")
+        self.balloon.alt = alt
+        self.balloon.lon = lon
+        self.balloon.lat = lat
+        self.balloon.temperature = temperature
+        self.balloon.vertical_velocity = vertical_velocity
+        self.balloon.volume = volume
+        self.balloon.helium_density = helium_density
+        self.balloon.helium_mass = helium_mass
+        self.balloon.sand = sand
+        self.current_time = current_time
         return total_cost, trajectory
     
     def render(self):
@@ -236,30 +287,6 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
             self.ax2 = self.fig.add_subplot(132)  # Resources plot
             self.ax3 = self.fig.add_subplot(133)  # Wind profile plot
             plt.tight_layout()
-
-    def shallow_copy(self):
-        
-        new_env = BalloonERAEnvironment.__new__(BalloonERAEnvironment)
-        new_env.balloon = self.balloon.clone_state()
-        new_env.dt = self.dt
-        new_env.target_lat = self.target_lat
-        new_env.target_lon = self.target_lon
-        new_env.target_alt = self.target_alt
-        new_env.current_time = self.current_time
-        new_env.trajectory = copy.deepcopy(self.trajectory)
-        new_env.wind_field = self.wind_field  # re-use
-        new_env.ds = self.ds  # re-use
-        new_env.start_time = self.start_time  # re-use
-        new_env.noise_seed = self.noise_seed  # re-use
-        new_env.viz = self.viz
-        if self.viz:
-        # Re-use figure handles if needed, or disable for rollouts
-            new_env.fig = self.fig
-            new_env.ax1 = self.ax1
-            new_env.ax2 = self.ax2
-            new_env.ax3 = self.ax3
-        return new_env
-
 
     def render(self) -> None:
         if self.viz:

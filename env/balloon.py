@@ -46,43 +46,6 @@ class Balloon:
         self.initial_helium_mass = self.helium_density * max_volume
         self.helium_mass = self.helium_density * max_volume
 
-    def clone_state(self):
-        new_balloon = Balloon.__new__(Balloon)
-        # === Copy mutable state ===
-        new_balloon.lat = self.lat
-        new_balloon.lon = self.lon
-        new_balloon.alt = self.alt
-        new_balloon.volume = self.volume
-        new_balloon.sand = self.sand
-        new_balloon.vertical_velocity = self.vertical_velocity
-        new_balloon.pressure_pre = self.pressure_pre
-        new_balloon.temperature = self.temperature
-        new_balloon.helium_mass = self.helium_mass
-
-        # === Copy constants and physical parameters ===
-        new_balloon.max_volume = self.max_volume
-        new_balloon.max_sand = self.max_sand
-        new_balloon.initial_helium_mass = self.initial_helium_mass
-        new_balloon.max_vent_rate = self.max_vent_rate
-        new_balloon.max_sand_rate = self.max_sand_rate
-        new_balloon.max_velocity = self.max_velocity
-
-        # === Copy constants ===
-        new_balloon.EARTH_RADIUS = self.EARTH_RADIUS
-        new_balloon.DEG_TO_RAD = self.DEG_TO_RAD
-        new_balloon.balloon_mass = self.balloon_mass
-        new_balloon.helium_density = self.helium_density
-        new_balloon.air_density0 = self.air_density0
-        new_balloon.gravity = self.gravity
-        new_balloon.T0 = self.T0
-        new_balloon.L = self.L
-        new_balloon.R = self.R
-        new_balloon.R_u = self.R_u
-        new_balloon.helium_molar_mass = self.helium_molar_mass
-        new_balloon.air_molar_mass = self.air_molar_mass
-        new_balloon.P0 = self.P0
-        return new_balloon
-
     def get_air_density(self, altitude: float) -> float:
         return self.air_density0 * np.exp(-altitude / 7000.0)
 
