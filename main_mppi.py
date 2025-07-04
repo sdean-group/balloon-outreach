@@ -15,7 +15,6 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     trajectory = [(state[0], state[1])]  # (lat, lon) pairs
     altitudes = [state[2]]  # Store altitudes
 
-    # 추가: 기록용 리스트
     actions = []
     velocities = []
     helium_mass = []
@@ -80,7 +79,7 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     plt.legend()
     
     plt.tight_layout()
-    plt.savefig('balloon_trajectory_and_altitude_test3.png')
+    plt.savefig('balloon_trajectory_and_altitude_test.png')
     plt.close()
 
     # 추가: Target velocity (action) vs. Current velocity, Resource 변화
@@ -107,7 +106,7 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig('balloon_velocity_and_resource_test3.png')
+    plt.savefig('balloon_velocity_and_resource_test.png')
     plt.close()
 
     return total_reward

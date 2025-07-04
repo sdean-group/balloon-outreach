@@ -342,7 +342,6 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         
         Args:
             init_state: Initial balloon state [init_lat, init_lon, init_alt]
-            initial_goal_cost: Euclidean distance to target point from current state
             state: Current state [lat, lon, alt, volume, sand, vel, time, ...]
             acc:  (vertical acceleration)
             step: Current step in the sequence
