@@ -124,11 +124,12 @@ def main():
     target_lat = 70
     target_lon = -90
     target_alt = 12.0
-    max_steps = 1440 #1 day for 60 minutes
-    time_step = 120 #120 minutes
+    time_step = 120 #120 seconds
+    max_steps = int(1440/(time_step/60)) #1 day
     noise_std = 1
+    horizon=10
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, dt=time_step)
-    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=10, noise_std=noise_std, num_iterations=1, horizon=1, objective='target')
+    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=10, noise_std=noise_std, num_iterations=1, horizon=horizon, objective='target')
     
     # Run one episode
     start = time.time()
