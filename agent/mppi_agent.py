@@ -139,7 +139,9 @@ class MPPIAgent:
     
         acc_samples = base_sequence + noise
         acc_samples = np.clip(acc_samples, self.acc_bounds[0], self.acc_bounds[1])
-        vel_samples = self.vertical_velocity + acc_samples
+        # vel_samples = self.vertical_velocity + acc_samples
+        accumulated_acc_samples = np.cumsum(acc_samples, axis=1)
+        vel_samples = self.vertical_velocity + accumulated_acc_samples
         # Clip to action bounds
         vel_samples = np.clip(vel_samples, self.vel_bounds[0], self.vel_bounds[1])
         
