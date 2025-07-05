@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.pyplot as plt
 from env.balloon_env import BaseBalloonEnvironment
-
+import time
 class MPPIAgent:
     """
     Model Predictive Path Integral (MPPI) agent for balloon navigation.
@@ -48,7 +48,7 @@ class MPPIAgent:
         # Initialize control sequence (all zeros initially)
         self.control_sequence = np.zeros(horizon)
         
-    def select_action(self, state: np.ndarray, env) -> np.ndarray:
+    def select_action(self, state: np.ndarray, env, step_num: int = 0) -> np.ndarray:
         """
         Select optimal action using MPPI algorithm.
         
@@ -61,20 +61,24 @@ class MPPIAgent:
         """
         if (self.objective == 'fly'):
                 self.temperature = 1
-        for _ in range(self.num_iterations):
-            # Sample control sequences
-            
-            self.vertical_velocity = env.balloon.vertical_velocity
+        self.vertical_velocity = env.balloon.vertical_velocity
+        optimal_acc_idx = step_num % self.num_iterations
+        # Run new MPPI loop 
+        if optimal_acc_idx == 0:
+            self.control_sequence = np.roll(self.control_sequence, -self.num_iterations)
+            self.control_sequence[-self.num_iterations:] = self.control_sequence[np.max([-self.horizon, -self.num_iterations-1])]
             acc_samples, vel_samples = self._sample_control_sequences()
             
             # Evaluate each control sequence
             costs = []
             trajectories = []
+            start_time = time.time()
             for i in range(self.num_samples):
                 cost, trajectory = self._evaluate_control_sequence(acc_samples[i], vel_samples[i], state, env)
                 costs.append(cost)
                 trajectories.append(trajectory)
-
+            end_time = time.time()
+            print(f"MPPI evaluation time took: {end_time - start_time}")
             # Convert costs to weights
             costs = np.array(costs)
             
@@ -84,7 +88,6 @@ class MPPIAgent:
                 costs = np.where(np.isfinite(costs), costs, 1e6)
             
             weights = self._compute_weights(costs)
-
             
             # Check for NaN weights
             if np.any(~np.isfinite(weights)):
@@ -93,7 +96,7 @@ class MPPIAgent:
             
             # Compute optimal control by weighted averaging
             optimal_acc = np.average(acc_samples, axis=0, weights=weights)
-            
+        
             # Check for NaN in optimal control
             if not np.isfinite(optimal_acc[0]):
                 print("Warning: NaN optimal control detected, using zero action")
@@ -102,24 +105,25 @@ class MPPIAgent:
             # Update control sequence (shift and append)
             # min_cost_idx = np.argmin(costs)
             # self.control_sequence = np.roll(self.control_sequence, -1)
-            self.control_sequence = np.roll(optimal_acc, -1)
-            self.control_sequence[-1] = optimal_acc[0]
-            if self.visualize:
-                #roll through optimal acc. but then we add 1 from acc to the running contorl seq
-                final = []
-                curr_velocity = self.vertical_velocity
+            # self.control_sequence = np.roll(optimal_acc, -1)
+            # self.control_sequence[-1] = optimal_acc[0]
+            self.control_sequence = optimal_acc
+        if self.visualize:
+            #roll through optimal acc. but then we add 1 from acc to the running contorl seq
+            final = []
+            curr_velocity = self.vertical_velocity
+            final.append(curr_velocity)
+            for acc in self.control_sequence:
+                curr_velocity += acc
                 final.append(curr_velocity)
-                for acc in optimal_acc:
-                    curr_velocity += acc
-                    final.append(curr_velocity)
-                    
-                _, control_trajectory = env.rollout_sequence_mppi(final, len(final))
-                target_state = [env.target_lat, env.target_lon, env.target_alt]
-                self._visualize_trajectories(target_state, trajectories, control_trajectory)
+                
+            _, control_trajectory = env.rollout_sequence_mppi(final, len(final))
+            target_state = [env.target_lat, env.target_lon, env.target_alt]
+            self._visualize_trajectories(target_state, trajectories, control_trajectory)
 
       
         
-        optimal_vel = np.array([self.vertical_velocity + optimal_acc[0]])
+        optimal_vel = np.array([self.vertical_velocity + self.control_sequence[optimal_acc_idx]])
         # Return first action from optimal sequence
         # return np.array([optimal_acc[0]])
         return optimal_vel
@@ -307,7 +311,8 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             Cost for this step
         """
         # Extract state components
-        w1,w2,w3,w4,w5 = 30,15,1,5,1
+        # w1,w2,w3,w4,w5 = 30,15,1,5,1
+        w1,w2,w3,w4,w5 = 30,0.1,1,5,1
         lat, lon, alt = state[0], state[1], state[2]
         volume_ratio, sand_ratio = state[3], state[4]
         
@@ -315,6 +320,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         lat_diff = lat - target_state[0]
         lon_diff = lon - target_state[1]
         distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        # distance_cost = distance        # 
         distance_cost = distance - initial_goal_cost
         # Altitude deviation from target. 
 
