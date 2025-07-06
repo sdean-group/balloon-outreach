@@ -1,5 +1,5 @@
 import numpy as np
-
+from env.util import wind_displacement_to_position
 class WindVector:
     """Wind vector (simple structure)"""
     def __init__(self, u: float, v: float):
@@ -237,8 +237,11 @@ class Balloon:
         """
         # 1️⃣ Horizontal motion (latitude & longitude updates in km)
         # print(f"target velocity: {action:.2f} m/s")
-        self.lat += wind.u * dt / 1000
-        self.lon += wind.v * dt / 1000
+        
+        self.du_km = wind.u * dt / 1000
+        self.dv_km = wind.v * dt / 1000
+        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
+        
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
         dVolume, dSand = self.internal_controller(self.vertical_velocity, action, dt, pressure)
 
@@ -248,8 +251,9 @@ class Balloon:
         for faster computation with less accuracy.
         """
         # Horizontal motion (same as original)
-        self.lat += wind.u * dt / 1000
-        self.lon += wind.v * dt / 1000
+        self.du_km = wind.u * dt / 1000
+        self.dv_km = wind.v * dt / 1000
+        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
         
         # Get current pressure
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
