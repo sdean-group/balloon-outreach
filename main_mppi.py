@@ -20,17 +20,20 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     helium_mass = []
     sands = []
     avg_opt_time = 0
-
+    avg_step_time = 0
     for step in range(max_steps):
         start = time.time()
         # Get action from agent
-        action = agent.select_action(state, env)
+        action = agent.select_action(state, env, step)
         end = time.time()
         # Take step
-        print(f"action: {action}, vertical_velocity: {env.balloon.vertical_velocity}")
-        state, reward, done, info = env.step(action)
-        total_reward += reward
         avg_opt_time += end-start
+        
+        start = time.time()
+        state, reward, done, info = env.step(action)
+        end = time.time()
+        avg_step_time += end-start
+        total_reward += reward
         
         actions.append(float(action[0]) if isinstance(action, np.ndarray) else float(action))
         velocities.append(env.balloon.vertical_velocity)
@@ -41,7 +44,8 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
         trajectory.append((state[0], state[1]))
         altitudes.append(state[2])
         print(f"Step {step}: lat: {state[0]:.2f}, lon: {state[1]:.2f}, alt: {state[2]:.2f}")
-        
+        print(f"Average time to get one action: {avg_opt_time/(step+1)}")
+        print(f"Average time to take one step: {avg_step_time/(step+1)}")
         # env.render()
         
         if done:
@@ -79,7 +83,7 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     plt.legend()
     
     plt.tight_layout()
-    plt.savefig('balloon_trajectory_and_altitude_test.png')
+    plt.savefig('balloon_trajectory_and_altitude.png')
     plt.close()
 
     # 추가: Target velocity (action) vs. Current velocity, Resource 변화
@@ -121,14 +125,17 @@ def main():
     initial_lat = 42.6
     initial_lon = -76.5
     initial_alt = 10.0
-    target_lat = 70
-    target_lon = -90
+    target_lat = 47
+    target_lon = -78
     target_alt = 12.0
-    max_steps = 1440 #1 day for 60 minutes
-    time_step = 120 #120 minutes
-    noise_std = 1
+    time_step = 120 #120 seconds
+    max_steps = int(1440/(time_step/60)) #1 day
+    noise_std = 0.1
+    horizon=10
+    num_samples=10
+    num_iterations=1
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, dt=time_step)
-    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=10, noise_std=noise_std, num_iterations=1, horizon=1, objective='target')
+    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=num_samples, noise_std=noise_std, num_iterations=num_iterations, horizon=horizon, objective='target')
     
     # Run one episode
     start = time.time()
