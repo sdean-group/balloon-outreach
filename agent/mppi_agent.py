@@ -3,6 +3,7 @@ from typing import Tuple, List
 import matplotlib.pyplot as plt
 from env.balloon_env import BaseBalloonEnvironment
 from mpl_toolkits import mplot3d
+from env.util import haversine_distance
 import time
 class MPPIAgent:
     """
@@ -62,6 +63,7 @@ class MPPIAgent:
         """
         if (self.objective == 'fly'):
                 self.temperature = 1
+                self.horizon = 5
         self.vertical_velocity = env.balloon.vertical_velocity
         optimal_acc_idx = step_num % self.num_iterations
         # Run new MPPI loop 
@@ -189,6 +191,15 @@ class MPPIAgent:
         return weights
     
     def _visualize_trajectories(self, target_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
+        """
+        Visualize the sampled trajectories and the final average trajectory for one step.
+        
+        Args:
+            target_state: The target point to reach (lat, lon, alt)
+            trajectories: List of sampled control sequences
+            final_trajectory: Weight average control sequence as a list of tuples [(lat1,lon1,alt1),(lat2,lon2,alt2)...]
+            
+        """
         # Plot final trajectory
         plt.figure(figsize=(12, 5))
         ax = plt.axes(projection='3d')
@@ -283,7 +294,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
             # Discourage looping
             backward_penalty = 0
-            for lat,lon in trajectory:
+            for lat,lon, alt in trajectory:
                 prev_dx = lon - env.balloon.lon
                 prev_dy = lat - env.balloon.lat
                 prev_r = np.sqrt(prev_dx**2 + prev_dy**2)
@@ -307,19 +318,17 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             Cost for this step
         """
         # Extract state components
-        # w1,w2,w3,w4,w5 = 30,15,1,5,1
-        w1,w2,w3,w4,w5 = 30,0.1,1,5,1
+        w1,w2,w3,w4,w5 = 30,0.1,1,1,1
         lat, lon, alt = state[0], state[1], state[2]
         volume_ratio, sand_ratio = state[3], state[4]
         
-        # Distance to target
+        # Euclidean Distance to target
         lat_diff = lat - target_state[0]
         lon_diff = lon - target_state[1]
         distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        # distance_cost = distance        # 
+        # distance_cost = distance
         distance_cost = distance - initial_goal_cost
-        # Altitude deviation from target. 
-
+        # Altitude deviation from target. Low weight to prioritize selection of best altitude
         alt_diff = (abs(alt - target_state[2]))**2
         
         # Resource penalty (encourage conservation)
@@ -354,15 +363,13 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             Cost for this step
         """
         # Extract state components
-        w1,w2,w3,w4,w5 = -50,0,1,1,5
+        w1,w2,w3,w4,w5 = -50,0.1,0,1,5
         lat, lon, alt = state[0], state[1], state[2]
         volume_ratio, sand_ratio = state[3], state[4]
         
         
         # Encourage distance away from init to target
-        lat_diff = lat - init_state[0]
-        lon_diff = lon - init_state[1]
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        distance = haversine_distance(init_state[1], init_state[0], lon, lat)
         # Encourage altitude deviation from target. 
         alt_diff = (alt - init_state[2])**2
         

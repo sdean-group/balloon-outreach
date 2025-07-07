@@ -76,11 +76,11 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     plt.plot(altitudes, 'b-')
     if agent.objective == 'target':
         plt.axhline(y=env.target_alt,linewidth=1, color='r', label='Target End Altitude')
+        plt.legend()
     plt.grid(True)
     plt.title(f'Altitude Profile using {env.dt} delta_time')
     plt.xlabel('Time Step')
     plt.ylabel('Altitude (km)')
-    plt.legend()
     
     plt.tight_layout()
     plt.savefig('balloon_trajectory_and_altitude.png')
@@ -122,8 +122,8 @@ def main():
     start_time = dt.datetime(2024, 7, 1, 0, 0)
 
     #This is Ithaca
-    initial_lat = 42.6
-    initial_lon = -76.5
+    initial_lat = 0
+    initial_lon = 0
     initial_alt = 10.0
     target_lat = 70
     target_lon = -90
@@ -132,7 +132,10 @@ def main():
     max_steps = int(1440/(time_step/60)) #1 day
     noise_std = 0.1
     acc_bounds= (-0.1, 0.1)
+    # For target, uses the simplified step in rollouts
     horizon=10
+    # For fly
+    # horizon = 5
     num_samples=10
     num_iterations=1
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, dt=time_step)

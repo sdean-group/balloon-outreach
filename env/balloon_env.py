@@ -34,9 +34,9 @@ class BaseBalloonEnvironment:
         self.balloon.volume = self.init_state[3]
         self.balloon.sand = self.init_state[4]
         self.balloon.vertical_velocity = 0.0
-        self.balloon.temperature = self.get_temperature(self.init_state[2] * 1000) 
+        self.balloon.temperature = self.balloon.get_temperature(self.init_state[2] * 1000) 
         self.balloon.helium_density = 0.1786
-        self.baloon.helium_mass = self.balloon.helium_density * self.balloon.volume
+        self.balloon.helium_mass = self.balloon.helium_density * self.balloon.volume
 
         self.current_time = 0.0
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
@@ -206,7 +206,7 @@ class BaseBalloonEnvironment:
             action = np.array([control_seq[t]])
             
             # Take step in environment
-            state, reward, done, _ = self.simplified_step(action)
+            state, reward, done, _ = self.step(action)
             trajectory.append((state[0], state[1]))
             
             # Accumulate cost (euclidean distance from current point and initial point)
