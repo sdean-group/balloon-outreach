@@ -204,18 +204,18 @@ class TreeSearchAgent:
             working_state, working_action = came_from[working_state] if working_state in came_from else (None, None)
         return path[::-1]
 
-    def plot_astar_tree(self, init_state: np.ndarray, g_score: dict, lat_long_atol: float = 1e-2, plot_suffix: str = ""):
+    def plot_astar_tree(self, init_state: np.ndarray, expanded_set: list, lat_long_atol: float = 1e-2, plot_suffix: str = ""):
         """
-        Plot the A* search tree.
+        Plot the A* search tree. Also plot the altitude distribution in a separate plot.
 
         Args:
             init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
             g_score: Dictionary mapping states to their g-scores (cost from start to state)
             lat_long_atol: Tolerance for latitude and longitude to define the goal region
         """
-        latitudes = [state[0] for state in g_score.keys()]
-        longitudes = [state[1] for state in g_score.keys()]
-        altitudes = [state[2] for state in g_score.keys()]
+        latitudes = [state[0] for state in expanded_set]
+        longitudes = [state[1] for state in expanded_set]
+        altitudes = [state[2] for state in expanded_set]
         fig, ax = plt.subplots()
         ax.scatter(latitudes, longitudes, c='blue', label='Explored States')
         ax.scatter(self.target_lat, self.target_lon, c='red', label='Target State', marker='x')
@@ -233,6 +233,14 @@ class TreeSearchAgent:
         ax.legend()
         plt.show()
         plt.savefig(f'explored_states_{plot_suffix}.png')
+
+        # Plot altitude distribution
+        fig, ax2 = plt.subplots()
+        ax2.hist(altitudes, bins=20, color='blue', alpha=0.7)
+        ax2.set_xlabel('Altitude (km)')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Altitude Distribution of Explored States')
+        plt.savefig(f'altitude_distribution_{plot_suffix}.png')
 
     def select_action_sequence(self, init_state: np.ndarray, plot_suffix : str = '') -> np.ndarray:
         """
@@ -252,6 +260,7 @@ class TreeSearchAgent:
 
         # Initialize the root node with the initial state
         open_set = [tuple(init_state)]  # Open set of nodes to explore
+        expanded_set = []               # List of expanded nodes (for tracking A* progress)
         action_sequence = []
         came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
         g_score = {tuple(init_state): 0}
@@ -263,6 +272,7 @@ class TreeSearchAgent:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
+            expanded_set.append(current_state)
             # Print the came_from action (if it exists)
             # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
@@ -295,7 +305,7 @@ class TreeSearchAgent:
 
         # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
         print("A* failed. Plotting explored states...")
-        self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
+        self.plot_astar_tree(init_state, expanded_set, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
 
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
