@@ -217,18 +217,19 @@ class TreeSearchAgent:
         longitudes = [state[1] for state in expanded_set]
         altitudes = [state[2] for state in expanded_set]
         fig, ax = plt.subplots()
-        ax.scatter(latitudes, longitudes, c='blue', label='Explored States')
-        ax.scatter(self.target_lat, self.target_lon, c='red', label='Target State', marker='x')
+        # longitudes should be plotted on the x-axis, latitudes on the y-axis.
+        ax.scatter(longitudes, latitudes, c='blue', label='Explored States')
+        ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
         # show initial state
-        ax.scatter(init_state[0], init_state[1], c='green', label='Initial State', marker='o')
+        ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o')
         # Plot a green circle with radius lat_long_atol around the target state.
-        circle = plt.Circle((self.target_lat, self.target_lon), lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
+        circle = plt.Circle((self.target_lon, self.target_lat), lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
         # Write altitudes on the lat/long points.
         for i, (lat, lon, alt) in enumerate(zip(latitudes, longitudes, altitudes)):
-            ax.text(lat, lon, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
+            ax.text(lon, lat, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
         ax.add_artist(circle)
-        ax.set_xlabel('Latitude')
-        ax.set_ylabel('Longitude')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
         ax.set_title('Explored States in A* Search')
         ax.legend()
         plt.show()
