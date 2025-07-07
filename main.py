@@ -3,6 +3,8 @@ from env.balloon_env import BalloonEnvironment
 from env.visualize import plot_trajectory_earth
 from agent.random_agent import RandomAgent
 from agent.goal_agent import GoalDirectedAgent
+from agent.tree_search_agent import TreeSearchAgent
+from agent.mppi_agent import MPPIAgent
 import matplotlib.pyplot as plt
 import env as env_pkg  # module reference for locating data files
 from pathlib import Path
@@ -21,7 +23,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     for step in range(max_steps):
         # Get action from agent
         action = agent.select_action(state, max_steps, step)
-        # print(action)
+        #print(f"hi {action}")
         # Take step
         state, reward, done, info = env.step(action)
         total_reward += reward
@@ -44,6 +46,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     plt.plot(lons, lats, 'b-', alpha=0.5)
     plt.plot(lons[0], lats[0], 'go', label='Start')
     plt.plot(lons[-1], lats[-1], 'ro', label='End')
+    plt.plot(env.target_lon, env.target_lat, 'rx', label='Target End')
     plt.grid(True)
     plt.title('Balloon Trajectory')
     plt.xlabel('Longitude')
@@ -53,6 +56,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
     # Altitude plot
     plt.subplot(1, 2, 2)
     plt.plot(altitudes, 'b-')
+    plt.axhline(y=env.target_alt,linewidth=1, color='r', label='Target End Altitude')
     plt.grid(True)
     plt.title('Altitude Profile')
     plt.xlabel('Time Step')
@@ -84,7 +88,7 @@ def run_episode(env: BalloonEnvironment, agent: RandomAgent, max_steps: int = 10
 def main():
     # Create environment and agent
     env = BalloonEnvironment()
-    agent = RandomAgent()
+    agent = MPPIAgent(env)
     # agent = GoalDirectedAgent(target_lat=env.target_lat, target_lon=env.target_lon, target_alt=env.target_alt)
     # Run one episode
     reward = run_episode(env, agent)
