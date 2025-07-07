@@ -94,7 +94,7 @@ class TreeSearchAgent:
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean'):
+    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False):
         if balloon_env is not None:                     # NOTE: this represents the balloon environment for the root node only.
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -120,6 +120,8 @@ class TreeSearchAgent:
             self.heuristic = haversine_heuristic
         else:
             raise ValueError(f"Unknown heuristic: {heuristic}. Supported heuristics: 'euclidean', 'zero'.")
+        
+        self.simplified_step = simplified_step  # If True, use simplified step function.
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -170,7 +172,11 @@ class TreeSearchAgent:
         self.balloon_env.set_balloon_state(current_balloonstate)
         
         # Step the balloon environment with the action.
-        state, _, _, _ = self.balloon_env.step(action_value)
+        if self.simplified_step:
+            # Use simplified step function.
+            state, _, _, _ = self.balloon_env.simplified_step(action_value)
+        else:
+            state, _, _, _ = self.balloon_env.step(action_value)
 
         # Extract lat/long/alt/t from the new state, and return the updated balloon environment.
         new_state = np.array([state[0], state[1], state[2], state[6]])
@@ -293,13 +299,13 @@ class TreeSearchAgent:
 
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
-              distance='euclidean', heuristic='euclidean', plot_suffix: str = ""):
+              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
-    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic)
+    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     env.balloon = Balloon(initial_lat=initial_state[0],
