@@ -9,7 +9,24 @@ import xarray as xr
 import datetime as dt
 import copy
 
-      
+class BalloonState:
+    """
+    Minimum set of balloon state variables needed for control.
+    (used in e.g. MPPI and A*)
+    """
+    def __init__(self, alt: float, lon: float, lat: float, \
+                 temperature: float, vertical_velocity: float, volume: float, helium_density: float, helium_mass: float, sand: float, current_time: float):
+        self.lat = lat
+        self.lon = lon
+        self.alt = alt
+        self.temperature = temperature
+        self.vertical_velocity = vertical_velocity
+        self.volume = volume
+        self.helium_density = helium_density
+        self.helium_mass = helium_mass
+        self.sand = sand
+        self.current_time = current_time
+
 class BaseBalloonEnvironment:
     def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
         self.balloon = balloon
@@ -279,6 +296,38 @@ class BaseBalloonEnvironment:
     def render(self):
         # Optionally implement or override in child
         pass
+
+    def get_balloon_state(self) -> BalloonState:
+        """
+        Returns the current state of the balloon as a BalloonState object.
+        """
+        return BalloonState(
+            alt=self.balloon.alt,
+            lon=self.balloon.lon,
+            lat=self.balloon.lat,
+            temperature=self.balloon.temperature,
+            vertical_velocity=self.balloon.vertical_velocity,
+            volume=self.balloon.volume,
+            helium_density=self.balloon.helium_density,
+            helium_mass=self.balloon.helium_mass,
+            sand=self.balloon.sand,
+            current_time=self.current_time
+        )
+    
+    def set_balloon_state(self, state: BalloonState) -> None:
+        """
+        Sets the balloon's state using a BalloonState object.
+        """
+        self.balloon.alt = state.alt
+        self.balloon.lon = state.lon
+        self.balloon.lat = state.lat
+        self.balloon.temperature = state.temperature
+        self.balloon.vertical_velocity = state.vertical_velocity
+        self.balloon.volume = state.volume
+        self.balloon.helium_density = state.helium_density
+        self.balloon.helium_mass = state.helium_mass
+        self.balloon.sand = state.sand
+        self.current_time = state.current_time
 
 class BalloonEnvironment(BaseBalloonEnvironment):
     def __init__(self, initial_lat=0.0, initial_lon=0.0, initial_alt=10.0, dt=60, target_lat=500, target_lon=-100, target_alt=12):
