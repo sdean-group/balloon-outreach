@@ -153,7 +153,7 @@ class BaseBalloonEnvironment:
             
             # Take step in environment
             state, reward, done, _ = self.simplified_step(action)
-            trajectory.append((state[0], state[1]))
+            trajectory.append((state[0], state[1], state[2]))
             
             # Accumulate cost (negative reward)
             total_cost -= reward
@@ -207,7 +207,7 @@ class BaseBalloonEnvironment:
             
             # Take step in environment
             state, reward, done, _ = self.step(action)
-            trajectory.append((state[0], state[1]))
+            trajectory.append((state[0], state[1],state[2]))
             
             # Accumulate cost (euclidean distance from current point and initial point)
             total_cost -= np.linalg.norm(state[:3] - self.init_state)

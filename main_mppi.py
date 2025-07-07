@@ -122,11 +122,11 @@ def main():
     start_time = dt.datetime(2024, 7, 1, 0, 0)
 
     #This is Ithaca
-    initial_lat = 0
-    initial_lon = 0
+    initial_lat = 42.6
+    initial_lon = -76.5
     initial_alt = 10.0
-    target_lat = 70
-    target_lon = -90
+    target_lat = 47
+    target_lon = -78
     target_alt = 12.0
     time_step = 120 #120 seconds
     max_steps = int(1440/(time_step/60)) #1 day
