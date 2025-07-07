@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple, List
 import matplotlib.pyplot as plt
 from env.balloon_env import BaseBalloonEnvironment
+from mpl_toolkits import mplot3d
 import time
 class MPPIAgent:
     """
@@ -16,8 +17,8 @@ class MPPIAgent:
                  num_samples: int = 100,
                  num_iterations: int = 1,
                  temperature: float = 1.0,
-                 noise_std: float = 1,
-                 acc_bounds: Tuple[float, float] = (-0.5, 0.5),
+                 noise_std: float = 0.1,
+                 acc_bounds: Tuple[float, float] = (-0.1, 0.1),
                  vel_bounds: Tuple[float, float] = (-1.0, 1.0),
                  visualize: bool = False,
                  objective:str = 'target'):
@@ -48,7 +49,7 @@ class MPPIAgent:
         # Initialize control sequence (all zeros initially)
         self.control_sequence = np.zeros(horizon)
         
-    def select_action(self, state: np.ndarray, env, step_num: int = 0) -> np.ndarray:
+    def select_action(self, state: np.ndarray, env:BaseBalloonEnvironment, step_num: int = 0) -> np.ndarray:
         """
         Select optimal action using MPPI algorithm.
         
@@ -116,13 +117,10 @@ class MPPIAgent:
             for acc in self.control_sequence:
                 curr_velocity += acc
                 final.append(curr_velocity)
-                
-            _, control_trajectory = env.rollout_sequence_mppi(final, len(final))
+            _, control_trajectory = self._evaluate_control_sequence(optimal_acc, final, state, env)
             target_state = [env.target_lat, env.target_lon, env.target_alt]
             self._visualize_trajectories(target_state, trajectories, control_trajectory)
 
-      
-        
         optimal_vel = np.array([self.vertical_velocity + self.control_sequence[optimal_acc_idx]])
         # Return first action from optimal sequence
         # return np.array([optimal_acc[0]])
@@ -193,20 +191,18 @@ class MPPIAgent:
     def _visualize_trajectories(self, target_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
         # Plot final trajectory
         plt.figure(figsize=(12, 5))
+        ax = plt.axes(projection='3d')
         
         # Position plot
-        #plt.subplot(1, 2, 1)
-        #make this 3d eventually
         for trajectory in trajectories:
-            print(trajectory)
-            lats, lons = zip(*trajectory)
-            plt.plot(lons, lats, 'b-', alpha=0.5)
-        lats,lons = zip(*final_trajectory)
-        plt.plot(lons, lats, 'r-', alpha=1)
-        plt.plot(lons[0], lats[0], 'go', label='Start')
-        plt.plot(target_state[1], target_state[0], 'rx', label='Target End')
+            lats, lons, alts = zip(*trajectory)
+            ax.plot3D(lons, lats,alts, 'b-', alpha=0.3)
+        lats,lons,alts = zip(*final_trajectory)
+        ax.plot3D(lons, lats,alts, 'r-', alpha=1)
+        plt.plot(lons[0], lats[0],alts[0], 'go', label='Start')
+        plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
         plt.grid(True)
-        plt.title(f'Balloon Trajectory with MPPI')
+        ax.set_title(f'Balloon Trajectory with MPPI')
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.legend()
@@ -227,7 +223,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
     """
     
     def __init__(self, 
-                 horizon: int = 1,
+                 horizon: int = 10,
                  num_samples: int = 10,
                  num_iterations:int = 1,
                  temperature: float = 10,

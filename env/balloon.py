@@ -13,8 +13,8 @@ class Balloon:
                  initial_alt: float,
                  max_volume: float = 1000.0,
                  max_sand: float = 100):
-        self.lat = initial_lat
-        self.lon = initial_lon
+        self.lat = initial_lat # deg
+        self.lon = initial_lon # deg
         self.alt = initial_alt  # km
         self.volume = max_volume
         self.sand = max_sand

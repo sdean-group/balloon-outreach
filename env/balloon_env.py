@@ -251,7 +251,7 @@ class BaseBalloonEnvironment:
             # next_state, _, done, _ = self.step(action)
             next_state, _, done, _ = self.simplified_step(action)
             
-            trajectory.append((next_state[0], next_state[1]))
+            trajectory.append((next_state[0], next_state[1], next_state[2]))
             # Custom cost function
             cost = cost_fcn(*params, next_state, acc[0], t)
             total_cost += cost
