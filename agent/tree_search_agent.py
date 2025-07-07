@@ -331,7 +331,7 @@ def test2():
     np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.14, target_lon=0.16, target_alt=10,
+              target_lat=0.03, target_lon=0.16, target_alt=10,
               distance='euclidean', heuristic='euclidean',
               plot_suffix="test2")
 
@@ -342,7 +342,7 @@ def test3():
     np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.14, target_lon=0.16, target_alt=10,
+              target_lat=0.011, target_lon=0, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test3")
     
