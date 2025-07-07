@@ -1,6 +1,6 @@
 import numpy as np
 from env.balloon import Balloon
-from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment
+from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment,BalloonState
 import copy
 import matplotlib.pyplot as plt
 
@@ -147,16 +147,16 @@ class TreeSearchAgent:
         """
         return ['stay', 'ascend', 'descend']
 
-    def apply_action(self, action: str, current_balloonenv : BalloonEnvironment) -> np.ndarray:
+    def apply_action(self, action: str, current_balloonstate: BalloonState) -> tuple[np.ndarray, BalloonState]:
         """
         Apply an action to the current state and return the new state (adapted from BalloonEnvironment.step())
         
         Args:
             action: Action to apply ('stay', 'ascend', 'descend')
-            current_balloonenv: Current BalloonEnvironment instance to apply the action on (contains the balloon state).
-        
+            current_balloonstate: Current BalloonState instance to apply the action on.
+
         Returns:
-            New state after applying the action [lat, lon, alt, t], and the updated BalloonEnvironment instance.
+            New state after applying the action [lat, lon, alt, t], and the updated BalloonState instance.
         """
         # Convert action string to numerical value.
         if action == 'stay':
@@ -166,16 +166,17 @@ class TreeSearchAgent:
         elif action == 'descend':
             action_value = -1.0
 
-        # Create deep-copy of the current balloon environment.
-        balloon_env = copy.deepcopy(current_balloonenv)
+        # Push the current state into the balloon environment object associated with this instance.
+        self.balloon_env.set_balloon_state(current_balloonstate)
         
         # Step the balloon environment with the action.
-        state, _, _, _ = balloon_env.step(action_value)
-        
+        state, _, _, _ = self.balloon_env.step(action_value)
+
         # Extract lat/long/alt/t from the new state, and return the updated balloon environment.
         new_state = np.array([state[0], state[1], state[2], state[6]])
+        new_balloon_state = self.balloon_env.get_balloon_state()
 
-        return new_state, balloon_env
+        return new_state, new_balloon_state
 
 
     def reconstruct_path(self, came_from: dict, current_state: tuple) -> np.ndarray:
@@ -249,8 +250,8 @@ class TreeSearchAgent:
         came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
         g_score = {tuple(init_state): 0}
         f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
-        # We also need a lookup table from each state to a Balloon instance.
-        state_to_balloon_env = {tuple(init_state): self.balloon_env}
+        # Initialize lookup table from each state to a BalloonState instance.
+        state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
@@ -267,7 +268,7 @@ class TreeSearchAgent:
 
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
-                child_state, child_state_balloon_env = self.apply_action(action, state_to_balloon_env[current_state])
+                child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
                 tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
                 if tentative_g_score < g_score.get(tuple(child_state), np.inf):
                     # record the better path.
@@ -275,7 +276,7 @@ class TreeSearchAgent:
                     g_score[tuple(child_state)] = tentative_g_score
                     f_score[tuple(child_state)] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
                     # Update the balloon for this child state.
-                    state_to_balloon_env[tuple(child_state)] = child_state_balloon_env
+                    state_to_balloon_state[tuple(child_state)] = child_balloon_state
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
 
@@ -362,10 +363,9 @@ def test_era():
     start_time = dt.datetime(2024, 7, 1, 0, 0)
     # Create environment and agent
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, viz=False)
-
     # Run same test case as case 3.
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.060, target_lon=2.25, target_alt=10,
+              target_lat=-0.0001, target_lon=0.04, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test_era")
 
