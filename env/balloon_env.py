@@ -289,11 +289,13 @@ class BalloonEnvironment(BaseBalloonEnvironment):
 
 class BalloonERAEnvironment(BaseBalloonEnvironment):
     """Environment for balloon navigation using ERA5 wind field"""
-    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, initial_lat: float = 0.0, initial_lon: float = 0.0, initial_alt: float = 10.0, target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, dt=60, viz = True):
+    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, add_noise: bool = True, \
+                 initial_lat: float = 0.0, initial_lon: float = 0.0, initial_alt: float = 10.0, \
+                 target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, dt=60, viz = True):
         # balloon = Balloon(initial_lat=42.6, initial_lon=-76.5, initial_alt=10.0)
         balloon = Balloon(initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt)
         super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt)
-        self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed)
+        self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed, add_noise=add_noise)
         self.ds = ds
         self.start_time = start_time
         self.noise_seed = noise_seed
