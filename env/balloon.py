@@ -1,5 +1,5 @@
 import numpy as np
-
+from env.util import wind_displacement_to_position
 class WindVector:
     """Wind vector (simple structure)"""
     def __init__(self, u: float, v: float):
@@ -154,6 +154,49 @@ class Balloon:
         self.vertical_velocity = v_current
         return total_dMass, total_dSand
 
+    def simplified_internal_controller(self, v_init, v_des, dt, pressure):
+        """
+        Simplified internal controller that eliminates the inner loop for faster computation.
+        Uses direct calculations instead of iterative PID control.
+        """
+        # Simple proportional control based on desired velocity
+        velocity_error = v_des - v_init
+        
+        # Direct calculation of control actions without inner loop
+        if v_des < 0:  # Want to go up (ascend)
+            # Drop sand to reduce weight
+            sand_factor = abs(velocity_error) * 0.1  # Simplified relationship
+            dSand = min(sand_factor * dt, self.max_sand_rate * dt)
+            dSand = min(dSand, self.sand)  # Can't drop more sand than we have
+            dMass = 0.0
+        else:  # Want to go down or stay steady
+            # Vent helium to reduce volume
+            volume_factor = abs(velocity_error) * 0.05  # Simplified relationship
+            dVolume = min(volume_factor * dt, self.max_vent_rate * dt)
+            dVolume = min(dVolume, self.volume * 0.1)  # Can't vent more than 10% of volume
+            
+            # Convert volume change to mass change
+            delta_n = (pressure * 100) * dVolume / (self.R_u * self.temperature)
+            dMass = delta_n * self.helium_molar_mass
+            dMass = min(dMass, self.helium_mass)  # Can't vent more helium than we have
+            dSand = 0.0
+        
+        # Apply changes directly
+        self.helium_mass -= dMass
+        self.sand -= dSand
+        
+        alt_change = v_des * dt / 1000  # Convert to km
+        self.alt += alt_change
+        self.alt = np.clip(self.alt, 5.0, 25.0)
+        
+        # Update temperature and pressure
+        self.temperature = self.get_temperature(self.alt * 1000)
+        
+        # Update vertical velocity
+        self.vertical_velocity = v_des
+        
+        return dMass, dSand
+
     def drag_force(self, pressure: float, net_force: float, vel: float = None):
         if vel is None:
             vel = self.vertical_velocity
@@ -194,8 +237,27 @@ class Balloon:
         """
         # 1️⃣ Horizontal motion (latitude & longitude updates in km)
         # print(f"target velocity: {action:.2f} m/s")
-        self.lat += wind.u * dt / 1000
-        self.lon += wind.v * dt / 1000
+        
+        self.du_km = wind.u * dt / 1000
+        self.dv_km = wind.v * dt / 1000
+        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
+        
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
         dVolume, dSand = self.internal_controller(self.vertical_velocity, action, dt, pressure)
+
+    def simplified_step(self, wind: WindVector, dt: float, action: float = 0.0) -> None:
+        """
+        Simplified step function that uses the simplified internal controller
+        for faster computation with less accuracy.
+        """
+        # Horizontal motion (same as original)
+        self.du_km = wind.u * dt / 1000
+        self.dv_km = wind.v * dt / 1000
+        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
+        
+        # Get current pressure
+        pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
+        
+        # Use simplified controller
+        dMass, dSand = self.simplified_internal_controller(self.vertical_velocity, action, dt, pressure)
  

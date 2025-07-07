@@ -45,6 +45,22 @@ class BaseBalloonEnvironment:
         reward = self._get_reward()
         done, reason = self._is_done()
         return state, reward, done, reason
+    def simplified_step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, str]:
+        action_value = float(action[0]) if isinstance(action, np.ndarray) else float(action)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
+        wind = self.wind_field.get_wind(
+            self.balloon.lon,
+            self.balloon.lat,
+            pressure,
+            self.current_time
+        )
+        self.balloon.simplified_step(wind, self.dt, action_value)
+        self.current_time += self.dt / 3600
+        state = self._get_state()
+        reward = self._get_reward()
+        done, reason = self._is_done()
+        return state, reward, done, reason
+    
     def _is_done(self) -> Tuple[bool, str]:
         lat_diff = self.balloon.lat - self.target_lat
         lon_diff = self.balloon.lon - self.target_lon
@@ -122,7 +138,7 @@ class BaseBalloonEnvironment:
             action = np.array([control_seq[t]])
             
             # Take step in environment
-            state, reward, done, _ = self.step(action)
+            state, reward, done, _ = self.simplified_step(action)
             trajectory.append((state[0], state[1]))
             
             # Accumulate cost (negative reward)
@@ -176,7 +192,7 @@ class BaseBalloonEnvironment:
             action = np.array([control_seq[t]])
             
             # Take step in environment
-            state, reward, done, _ = self.step(action)
+            state, reward, done, _ = self.simplified_step(action)
             trajectory.append((state[0], state[1]))
             
             # Accumulate cost (euclidean distance from current point and initial point)
@@ -225,16 +241,16 @@ class BaseBalloonEnvironment:
         sand = self.balloon.sand
         current_time = self.current_time
 
-        # Rollout the control sequence
         total_cost = 0.0
         trajectory = []
-
         for t in range(max_steps):
             # Casting action and acc from scalars to arrays
             action = np.array([vel_seq[t]])
             acc = np.array([acc_seq[t]])
             # Take step in environment
-            next_state, _, done, _ = self.step(action)
+            # next_state, _, done, _ = self.step(action)
+            next_state, _, done, _ = self.simplified_step(action)
+            
             trajectory.append((next_state[0], next_state[1]))
             # Custom cost function
             cost = cost_fcn(*params, next_state, acc[0], t)
@@ -257,6 +273,7 @@ class BaseBalloonEnvironment:
         self.balloon.helium_mass = helium_mass
         self.balloon.sand = sand
         self.current_time = current_time
+        
         return total_cost, trajectory
     
     def render(self):
