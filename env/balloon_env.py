@@ -13,7 +13,8 @@ import copy
 class BaseBalloonEnvironment:
     def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
         self.balloon = balloon
-        self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt])
+        # Assumes balloon was created with initial states
+        self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt, balloon.volume, balloon.sand])
         self.dt = dt
         self.target_lat = target_lat
         self.target_lon = target_lon
@@ -24,6 +25,19 @@ class BaseBalloonEnvironment:
         self.trajectory['lon'].append(self.balloon.lon)
         self.trajectory['alt'].append(self.balloon.alt)
     def reset(self) -> np.ndarray:
+        """ 
+        Resets balloon and environment back to initial states. 
+        """
+        self.balloon.lat = self.init_state[0]
+        self.balloon.lon = self.init_state[1]
+        self.balloon.alt = self.init_state[2]
+        self.balloon.volume = self.init_state[3]
+        self.balloon.sand = self.init_state[4]
+        self.balloon.vertical_velocity = 0.0
+        self.balloon.temperature = self.get_temperature(self.init_state[2] * 1000) 
+        self.balloon.helium_density = 0.1786
+        self.baloon.helium_mass = self.balloon.helium_density * self.balloon.volume
+
         self.current_time = 0.0
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         self.trajectory['lat'].append(self.balloon.lat)
