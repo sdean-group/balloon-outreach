@@ -18,7 +18,9 @@ class Balloon:
         self.lon = initial_lon # deg
         self.alt = initial_alt  # km
         self.volume = initial_volume
+        self.initial_volume = initial_volume
         self.sand = initial_sand
+        self.initial_sand = initial_sand
         self.max_volume = max_volume
         self.EARTH_RADIUS = 6371  # km
         self.DEG_TO_RAD = np.pi / 180.0
