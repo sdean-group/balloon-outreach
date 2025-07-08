@@ -94,7 +94,8 @@ class TreeSearchAgent:
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False):
+    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
+                 lat_long_atol=1e-2, alt_atol=0.02):
         if balloon_env is not None:                     # NOTE: this represents the balloon environment for the root node only.
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -122,6 +123,10 @@ class TreeSearchAgent:
             raise ValueError(f"Unknown heuristic: {heuristic}. Supported heuristics: 'euclidean', 'zero'.")
         
         self.simplified_step = simplified_step  # If True, use simplified step function.
+
+        # Tolerances for goal state checking.
+        self.lat_long_atol = lat_long_atol  # Tolerance for latitude and longitude
+        self.alt_atol = alt_atol            # Tolerance for altitude
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -204,14 +209,13 @@ class TreeSearchAgent:
             working_state, working_action = came_from[working_state] if working_state in came_from else (None, None)
         return path[::-1]
 
-    def plot_astar_tree(self, init_state: np.ndarray, expanded_set: list, lat_long_atol: float = 1e-2, plot_suffix: str = ""):
+    def plot_astar_tree(self, init_state: np.ndarray, expanded_set: list, plot_suffix: str = ""):
         """
         Plot the A* search tree. Also plot the altitude distribution in a separate plot.
 
         Args:
             init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
             g_score: Dictionary mapping states to their g-scores (cost from start to state)
-            lat_long_atol: Tolerance for latitude and longitude to define the goal region
         """
         latitudes = [state[0] for state in expanded_set]
         longitudes = [state[1] for state in expanded_set]
@@ -223,7 +227,7 @@ class TreeSearchAgent:
         # show initial state
         ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o')
         # Plot a green circle with radius lat_long_atol around the target state.
-        circle = plt.Circle((self.target_lon, self.target_lat), lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
+        circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
         # Write altitudes on the lat/long points.
         for i, (lat, lon, alt) in enumerate(zip(latitudes, longitudes, altitudes)):
             ax.text(lon, lat, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
@@ -255,9 +259,6 @@ class TreeSearchAgent:
             action_sequence: A sequence of (state, action) pairs leading to the target state.
         """
         max_iterations = 1000  # Limit the number of iterations to prevent A* from running indefinitely.
-        # Tolerances (assume lat/long tolerance is the same; altitude tolerance is different.)
-        lat_long_atol = 1e-2  # 0.01 degrees in latitude/longitude.
-        alt_atol = 0.02  # 20 cm in altitude.
 
         # Initialize the root node with the initial state
         open_set = [tuple(init_state)]  # Open set of nodes to explore
@@ -278,9 +279,9 @@ class TreeSearchAgent:
             # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
             # Check if we reached the goal state
-            if self.is_goal_state(current_state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol])):
+            if self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
                 action_sequence = self.reconstruct_path(came_from, current_state)
-                self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
+                self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
                 return action_sequence
 
             # Generate children nodes for possible actions
@@ -306,17 +307,19 @@ class TreeSearchAgent:
 
         # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
         print("A* failed. Plotting explored states...")
-        self.plot_astar_tree(init_state, expanded_set, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
+        self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
 
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
-              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False):
+              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,\
+              lat_long_atol: float = 1e-2, alt_atol: float = 0.02):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
-    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step)
+    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
+                            lat_long_atol=lat_long_atol, alt_atol=alt_atol)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     env.balloon = Balloon(initial_lat=initial_state[0],

@@ -57,6 +57,7 @@ class WindField:
         )
 
         self.add_noise = add_noise
+        print(f"WindField initialized with noise enabled: {self.add_noise}")
 
         # Initialize and seed the noise model with a JAX PRNGKey
         self.noise_model = SimplexWindNoise()
