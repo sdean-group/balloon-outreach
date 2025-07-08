@@ -14,11 +14,11 @@ class BaseBalloonEnvironment:
     def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
         self.balloon = balloon
         self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt])
-        self.dt = dt
+        self.dt = dt # in seconds
         self.target_lat = target_lat
         self.target_lon = target_lon
         self.target_alt = target_alt
-        self.current_time = 0.0
+        self.current_time = 0.0 # in hours
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         self.trajectory['lat'].append(self.balloon.lat)
         self.trajectory['lon'].append(self.balloon.lon)
@@ -40,7 +40,7 @@ class BaseBalloonEnvironment:
             self.current_time
         )
         self.balloon.step(wind, self.dt, action_value)
-        self.current_time += self.dt / 3600
+        self.current_time += self.dt / 3600 
         state = self._get_state()
         reward = self._get_reward()
         done, reason = self._is_done()
@@ -291,6 +291,9 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
     """Environment for balloon navigation using ERA5 wind field"""
     def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, initial_lat: float = 0.0, initial_lon: float = 0.0, initial_alt: float = 10.0, target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, dt=60, viz = True):
         # balloon = Balloon(initial_lat=42.6, initial_lon=-76.5, initial_alt=10.0)
+        self.initial_lat = initial_lat
+        self.initial_lon = initial_lon
+        self.initial_alt = initial_alt
         balloon = Balloon(initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt)
         super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt)
         self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed)
@@ -304,7 +307,14 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
             self.ax2 = self.fig.add_subplot(132)  # Resources plot
             self.ax3 = self.fig.add_subplot(133)  # Wind profile plot
             plt.tight_layout()
-
+    def reset(self) -> np.ndarray:
+        self.current_time = 0.0
+        self.balloon.__init__(initial_lat=self.initial_lat, initial_lon=self.initial_lon, initial_alt=self.initial_alt)
+        self.trajectory = {'lat': [], 'lon': [], 'alt': []}
+        self.trajectory['lat'].append(self.balloon.lat)
+        self.trajectory['lon'].append(self.balloon.lon)
+        self.trajectory['alt'].append(self.balloon.alt)
+        return self._get_state()
     def render(self) -> None:
         if self.viz:
             self.ax1.clear()

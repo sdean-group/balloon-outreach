@@ -72,13 +72,13 @@ class MPPIAgent:
             # Evaluate each control sequence
             costs = []
             trajectories = []
-            start_time = time.time()
+            # start_time = time.time()
             for i in range(self.num_samples):
                 cost, trajectory = self._evaluate_control_sequence(acc_samples[i], vel_samples[i], state, env)
                 costs.append(cost)
                 trajectories.append(trajectory)
-            end_time = time.time()
-            print(f"MPPI evaluation time took: {end_time - start_time}")
+            # end_time = time.time()
+            # print(f"MPPI evaluation time took: {end_time - start_time}")
             # Convert costs to weights
             costs = np.array(costs)
             
