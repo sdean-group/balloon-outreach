@@ -94,8 +94,8 @@ class BaseBalloonEnvironment:
             self.balloon.lat,
             self.balloon.lon,
             self.balloon.alt,
-            self.balloon.volume / self.balloon.max_volume,
-            self.balloon.sand / self.balloon.max_sand,
+            self.balloon.volume / self.balloon.initial_volume,
+            self.balloon.sand / self.balloon.initial_sand,
             self.balloon.vertical_velocity,
             self.current_time
         ])
@@ -342,7 +342,7 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
             self.ax1.set_ylim(-10, 10)
             self.ax1.set_zlim(0, 25)
             self.ax1.legend()
-            self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.max_sand])
+            self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.initial_sand])
             self.ax2.set_ylim(0, 1)
             self.ax2.set_title('Resources')
             wind_column = self._get_wind_column()
