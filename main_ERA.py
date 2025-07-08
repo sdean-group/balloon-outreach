@@ -8,8 +8,7 @@ from agent.random_agent import RandomAgent
 from agent.pid_agent import PIDAgent
 from agent.tree_search_agent import TreeSearchAgent, run_astar
 import matplotlib.pyplot as plt
-
-# from env.visualize import plot_wind_field, plot_trajectory_earth
+from env.visualize import plot_wind_field, plot_trajectory_earth
 from pathlib import Path
 import sys
 import importlib.resources as pkg_resources
@@ -141,12 +140,11 @@ def run_episode(env: BalloonERAEnvironment, agent: PIDAgent, alt_plan,max_steps)
     plt.savefig('tracking.png')
 
 
-    # try:
-    #     texture_path = pkg_resources.files("env").joinpath("figs/2k_earth_daymap.jpg")
-    # except Exception:
-    #     texture_path = Path(__file__).resolve().parent / "env" / "figs" / "2k_earth_daymap.jpg"
-    # plot_trajectory_earth(lats, lons, altitudes, texture_path=str(texture_path), lon_offset_deg=210, flip_lat=True)
-
+    try:
+        texture_path = pkg_resources.files("env").joinpath("figs/2k_earth_daymap.jpg")
+    except Exception:
+        texture_path = Path(__file__).resolve().parent / "env" / "figs" / "2k_earth_daymap.jpg"
+    plot_trajectory_earth(lats, lons, altitudes, texture_path=str(texture_path), lon_offset_deg=210, flip_lat=True)
     return total_reward
 
 def main():
