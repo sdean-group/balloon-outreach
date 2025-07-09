@@ -132,14 +132,15 @@ def main():
     max_steps = int(1440/(time_step/60)) #1 day
     noise_std = 0.1
     acc_bounds= (-0.1, 0.1)
-    # For target, uses the simplified step in rollouts
+    objective = 'target'
+    # For target
     horizon=10
     # For fly
     # horizon = 5
     num_samples=10
     num_iterations=1
-    env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, dt=time_step)
-    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=num_samples, acc_bounds= acc_bounds, noise_std=noise_std, num_iterations=num_iterations, horizon=horizon,visualize=False, objective='target')
+    env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, objective=objective, dt=time_step, viz=False)
+    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=num_samples, acc_bounds= acc_bounds, noise_std=noise_std, num_iterations=num_iterations, horizon=horizon,visualize=False, objective=objective)
     # Run one episode
     start = time.time()
     reward = run_episode(env, agent, max_steps=max_steps)

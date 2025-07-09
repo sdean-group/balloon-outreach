@@ -61,9 +61,6 @@ class MPPIAgent:
         Returns:
             Optimal action as numpy array
         """
-        if (self.objective == 'fly'):
-                self.temperature = 1
-                self.horizon = 5
         self.vertical_velocity = env.balloon.vertical_velocity
         optimal_acc_idx = step_num % self.num_iterations
         # Run new MPPI loop 
@@ -81,7 +78,7 @@ class MPPIAgent:
                 costs.append(cost)
                 trajectories.append(trajectory)
             end_time = time.time()
-            print(f"MPPI evaluation time took: {end_time - start_time}")
+            #print(f"MPPI evaluation time took: {end_time - start_time}")
             # Convert costs to weights
             costs = np.array(costs)
             
@@ -121,7 +118,7 @@ class MPPIAgent:
                 final.append(curr_velocity)
             _, control_trajectory = self._evaluate_control_sequence(optimal_acc, final, state, env)
             target_state = [env.target_lat, env.target_lon, env.target_alt]
-            self._visualize_trajectories(target_state, trajectories, control_trajectory)
+            self._visualize_trajectories(target_state, env.init_state, trajectories, control_trajectory)
 
         optimal_vel = np.array([self.vertical_velocity + self.control_sequence[optimal_acc_idx]])
         # Return first action from optimal sequence
@@ -166,10 +163,7 @@ class MPPIAgent:
         Returns:
             Total cost of the trajectory, trajectory
         """
-        if self.objective == 'target':
-            return env.rollout_sequence_mppi_target(control_seq, min(self.horizon, len(control_seq)))
-        else:
-            return env.rollout_sequence_mppi_fly(control_seq,  min(self.horizon, len(control_seq)))
+        return env.rollout_sequence_mppi(control_seq, min(self.horizon, len(control_seq)))
 
     
     def _compute_weights(self, costs: np.ndarray) -> np.ndarray:
@@ -190,12 +184,13 @@ class MPPIAgent:
         weights = weights / np.sum(weights)
         return weights
     
-    def _visualize_trajectories(self, target_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
+    def _visualize_trajectories(self, target_state:np.ndarray, init_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
         """
         Visualize the sampled trajectories and the final average trajectory for one step.
         
         Args:
-            target_state: The target point to reach (lat, lon, alt)
+            target_state: The target point to reach (lat, lon, alt) if we are using the target objective
+            init_state: The balloon's original starting point
             trajectories: List of sampled control sequences
             final_trajectory: Weight average control sequence as a list of tuples [(lat1,lon1,alt1),(lat2,lon2,alt2)...]
             
@@ -210,8 +205,10 @@ class MPPIAgent:
             ax.plot3D(lons, lats,alts, 'b-', alpha=0.3)
         lats,lons,alts = zip(*final_trajectory)
         ax.plot3D(lons, lats,alts, 'r-', alpha=1)
-        plt.plot(lons[0], lats[0],alts[0], 'go', label='Start')
-        plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
+        plt.plot(lons[0], lats[0],alts[0], 'bo', label='Current Point')
+        plt.plot(init_state[1], init_state[0], init_state[2], 'go', label='Start')
+        if self.objective == 'target':
+            plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
         plt.grid(True)
         ax.set_title(f'Balloon Trajectory with MPPI')
         plt.xlabel('Longitude')
@@ -363,7 +360,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             Cost for this step
         """
         # Extract state components
-        w1,w2,w3,w4,w5 = -50,0.1,0,1,5
+        w1,w2,w3,w4,w5 = -50,-0.1,0,1,5
         lat, lon, alt = state[0], state[1], state[2]
         volume_ratio, sand_ratio = state[3], state[4]
         
