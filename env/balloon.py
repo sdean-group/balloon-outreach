@@ -83,6 +83,7 @@ class Balloon:
             helium_mass = self.helium_mass
             total_mass = self.balloon_mass + self.sand + helium_mass
             rho_air = (pressure_current * 100) / (self.R * 220)
+            # rho_air = (pressure_current * 100) / (self.R * self.temperature)
 
             buoyancy = rho_air * self.volume * self.gravity
             weight = total_mass * self.gravity
@@ -262,62 +263,7 @@ class Balloon:
         # Use simplified controller
         dMass, dSand = self.simplified_internal_controller(self.vertical_velocity, action, dt, pressure)
  
-    def step_with_resource(self, dt: float, dHelium: float = 0., dSand: float = 0., wind: WindVector = None):
-        # Handle wind with default value
-        if wind is None:
-            wind = WindVector(0., 0.)
-        # Handle horizontal motion
-        self.du_km = wind.u * dt / 1000
-        self.dv_km = wind.v * dt / 1000
-        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
-    
-        # calculate altitude and resource consumption
-        delta_t = 1
-        alt_current = self.alt
-        v_current = self.vertical_velocity  # Initialize v_current
-
-        
-        delta_Helium = dHelium / dt * delta_t
-        delta_Sand = dSand / dt * delta_t
-        pressure_pre = self.altitude_to_pressure(self.alt*1000)
-        pressure_current = pressure_pre
-
-        for _ in range(0, dt, delta_t):
-            self.sand -= delta_Sand
-            
-            self.helium_mass -= delta_Helium 
-            self.volume = self.helium_mass / self.helium_density
-            
-            
-            rho_air = (pressure_current * 100) / (self.R * 220)
-
-            total_mass = self.balloon_mass + self.sand + self.helium_mass
-            net_force = rho_air * self.volume * self.gravity - total_mass * self.gravity
-            drag_force = self.drag_force(pressure_current, net_force)
-
-            acceleration = (net_force + drag_force) / total_mass
-            v_current += acceleration * delta_t
-            v_current = np.clip(v_current, -self.max_velocity, self.max_velocity)
-            alt_current += v_current * delta_t / 1000
-            alt_current = np.clip(alt_current, 5.0, 25.0)
-
-            pressure_pre = pressure_current
-            self.temperature = self.get_temperature(alt_current * 1000)
-            pressure_current = self.altitude_to_pressure(alt_current * 1000)
-            self.volume = self.volume * (pressure_pre / pressure_current)
-            self.helium_density = self.helium_mass / self.volume
-            # Check if resources are depleted
-            if self.helium_mass <= 0:
-                return f"Running out of resource: helium", self.helium_mass, self.sand
-            if self.sand <= 0:
-                return f"Running out of resource: sand", self.helium_mass, self.sand
-            if self.volume > self.max_volume:
-                return f"Balloon burst", self.helium_mass, self.sand
-            
-        
-        self.alt = alt_current
-        self.vertical_velocity = v_current
-        return None, self.helium_mass, self.sand
+   
     def step_with_resource(self, dt: float, dHelium: float = 0., dSand: float = 0., wind: WindVector = None):
         # Handle wind with default value
         if wind is None:
