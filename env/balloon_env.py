@@ -8,7 +8,7 @@ from env.balloon import Balloon
 import xarray as xr
 import datetime as dt
 import copy
-
+from env.util import degrees_to_km
       
 class BaseBalloonEnvironment:
     def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
@@ -103,9 +103,13 @@ class BaseBalloonEnvironment:
         return np.array(wind_column)
     
     def _get_reward(self) -> float:
-        lat_diff = self.balloon.lat - self.target_lat
-        lon_diff = self.balloon.lon - self.target_lon
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        lat_diff_deg = self.balloon.lat - self.target_lat
+        lon_diff_deg = self.balloon.lon - self.target_lon
+        alt_diff_km = self.balloon.alt - self.target_alt
+
+        lon_diff_km, lat_diff_km = degrees_to_km(lon_diff_deg, lat_diff_deg)
+        distance = np.sqrt(lon_diff_km**2 + lat_diff_km**2 + alt_diff_km**2)
+        
         return -distance
     
     def rollout_sequence_mppi_target(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
