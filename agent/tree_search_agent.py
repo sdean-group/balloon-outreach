@@ -95,8 +95,8 @@ class TreeSearchAgent:
     Algorithm: A*
     """
     def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
-                 lat_long_atol=1e-2, alt_atol=0.02):
-        if balloon_env is not None:                     # NOTE: this represents the balloon environment for the root node only.
+                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000):
+        if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
             self.target_lon = balloon_env.target_lon
@@ -127,6 +127,9 @@ class TreeSearchAgent:
         # Tolerances for goal state checking.
         self.lat_long_atol = lat_long_atol  # Tolerance for latitude and longitude
         self.alt_atol = alt_atol            # Tolerance for altitude
+
+        # Max number of iterations.
+        self.max_iter = max_iter
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -330,15 +333,14 @@ class TreeSearchAgent:
         Returns
             action_sequence: A sequence of (state, action) pairs leading to the target state.
         """
-        max_iterations = 1000  # Limit the number of iterations to prevent A* from running indefinitely.
-
         # Initialize the root node with the initial state
         open_set = [tuple(init_state)]  # Open set of nodes to explore
         expanded_set = []               # List of expanded nodes (for tracking A* progress)
         action_sequence = []
         came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
         g_score = {tuple(init_state): 0}
-        f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        h_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        f_score = {tuple(init_state): g_score[tuple(init_state)] + h_score[tuple(init_state)]}
         # Initialize lookup table from each state to a BalloonState instance.
         state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
 
@@ -370,7 +372,8 @@ class TreeSearchAgent:
                     # record the better path.
                     came_from[tuple(child_state)] = (current_state, action)
                     g_score[tuple(child_state)] = tentative_g_score
-                    f_score[tuple(child_state)] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                    h_score[tuple(child_state)] = self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                    f_score[tuple(child_state)] = g_score[tuple(child_state)] + h_score[tuple(child_state)]
                     # Update the balloon for this child state.
                     state_to_balloon_state[tuple(child_state)] = child_balloon_state
                     if tuple(child_state) not in open_set:
@@ -388,8 +391,8 @@ class TreeSearchAgent:
             #             open_set.append(child_state_disc)
             # Increment iteration count and check for max iterations.
             it += 1
-            print(f"Iteration {it}/{max_iterations}")
-            if it >= max_iterations:
+            print(f"Iteration {it}/{self.max_iter}")
+            if it >= self.max_iter:
                 print("Max iterations reached. Stopping search.")
                 break
 
@@ -397,17 +400,23 @@ class TreeSearchAgent:
         print("A* failed. Plotting explored states...")
         self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
 
+        ## Even if A* fails, still return a path whose last state is
+        ## as close to the target as possible.
+        print("A* failed. Returning path to the closest state to the target.")
+        best_state = min(h_score, key=h_score.get)
+        action_sequence = self.reconstruct_path(came_from, best_state)
+        return action_sequence
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
-              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,\
-              lat_long_atol: float = 1e-2, alt_atol: float = 0.02):
+              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,
+              lat_long_atol: float = 1e-2, alt_atol: float = 0.02, max_iter: int = 1000):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
-                            lat_long_atol=lat_long_atol, alt_atol=alt_atol)
+                            lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     env.balloon = Balloon(initial_lat=initial_state[0],
