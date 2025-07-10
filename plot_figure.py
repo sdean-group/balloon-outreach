@@ -22,8 +22,11 @@ class BalloonTrajectoryAnimator:
         self.force_arrows = []
         self.force_labels = []
         self.ani = None
-        self.lat_range = [min(latitudes)-0.01, max(latitudes)+0.01]
-        self.lon_range = [min(longitudes)-0.01, max(longitudes)+0.01]
+        max_x_range = max((max(latitudes)-min(latitudes)), (max(longitudes)-min(longitudes))) * 0.5 + 0.5
+        mean_lat = (max(latitudes) + min(latitudes)) / 2 
+        mean_lon = (max(longitudes) + min(longitudes)) / 2 
+        self.lat_range = [mean_lat - max_x_range, mean_lat + max_x_range]
+        self.lon_range = [mean_lon - max_x_range, mean_lon + max_x_range]
         self.alt_range  = [0, 26]
         self.lat_scale = abs((self.lat_range[1] - self.lat_range[0])) / (self.alt_range[1] - self.alt_range[0])
         self.lon_scale = abs((self.lon_range[1] - self.lon_range[0])) / (self.alt_range[1] - self.alt_range[0])

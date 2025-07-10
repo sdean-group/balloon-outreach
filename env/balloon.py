@@ -13,7 +13,27 @@ class Balloon:
                  initial_alt: float,
                  initial_volume: float = 1000.0,
                  initial_sand: float = 100,
-                 max_volume: float = 1500.0):
+                 max_volume: float = 2500.0):
+        
+        self.max_volume = max_volume
+        self.EARTH_RADIUS = 6371  # km
+        self.DEG_TO_RAD = np.pi / 180.0
+        self.balloon_mass = 68.5
+        self.air_density0 = 1.225  # kg/m^3
+        self.gravity = 9.81  # m/s^2
+        self.T0 = 288.15 #Standard sea-level temperature K
+        self.L = 0.0065 #Lapse rate K/m
+        self.R = 287.05
+        self.R_u = 8.314 #Universal Gas Constant J/(mol·K)
+        self.helium_molar_mass = 0.0040026 #kg/mol
+        self.air_molar_mass = 0.02896 #kg/mol
+        self.P0 = 1013.25 #Standard sea-level pressure hPa
+        self.max_velocity = 1.0  # m/s
+        self.delta_t = 1
+        self.reset(initial_lat, initial_lon, initial_alt, initial_volume, initial_sand)
+        
+            
+    def reset(self, initial_lat: float, initial_lon: float, initial_alt: float, initial_volume: float = 1000.0, initial_sand: float = 100):
         self.lat = initial_lat # deg
         self.lon = initial_lon # deg
         self.alt = initial_alt  # km
@@ -21,38 +41,22 @@ class Balloon:
         self.initial_volume = initial_volume
         self.sand = initial_sand
         self.initial_sand = initial_sand
-        self.max_volume = max_volume
-        self.EARTH_RADIUS = 6371  # km
-        self.DEG_TO_RAD = np.pi / 180.0
-        self.balloon_mass = 68.5
         self.helium_density = 0.1786  # kg/m^3
-        self.air_density0 = 1.225  # kg/m^3
-        self.gravity = 9.81  # m/s^2
         self.vertical_velocity = 0.0
-        self.T0 = 288.15 #Standard sea-level temperature K
-        self.L = 0.0065 #Lapse rate K/m
         self.temperature = self.get_temperature(initial_alt * 1000)  # K
         self.temperature_pre = self.temperature
-        self.R = 287.05
-        self.R_u = 8.314 #Universal Gas Constant J/(mol·K)
-        self.helium_molar_mass = 0.0040026 #kg/mol
-        self.air_molar_mass = 0.02896 #kg/mol
-        self.P0 = 1013.25 #Standard sea-level pressure hPa
         self.max_vent_rate = initial_volume * 0.01  # m^3/dt
         self.max_sand_rate = initial_sand * 0.01  # kg/dt
         self.pressure_pre = self.altitude_to_pressure(self.alt * 1000)
-        self.max_velocity = 1.0  # m/s
-        self.delta_t = 1
-
-        # New state
+        
         self.initial_helium_mass = self.helium_density * initial_volume
         self.helium_mass = self.helium_density * initial_volume
 
         buoyancy, weight, net_force, drag_force, rho_air, total_mass = self.calc_forces(self.pressure_pre)
         acceleration = (net_force + drag_force) / total_mass
         self.vertical_velocity += acceleration * self.delta_t
-        print(f"vertical_velocity: {self.vertical_velocity}")
-            
+        self.forces = [buoyancy, -weight, drag_force, net_force+drag_force]
+
 
     def get_air_density(self, altitude: float) -> float:
         return self.air_density0 * np.exp(-altitude / 7000.0)
@@ -64,7 +68,7 @@ class Balloon:
     def get_temperature(self, altitude: float) -> float:
         return self.T0 - self.L * altitude
 
-    def internal_controller(self, v_init, v_des, dt, pressure):
+    def internal_controller(self, v_init, v_des, dt, pressure, limit_volume=False):
         # delta_t = 1
         v_current = v_init
         pressure_current = pressure
@@ -147,12 +151,19 @@ class Balloon:
             self.temperature = self.get_temperature(alt_current * 1000)
             pressure_current = self.altitude_to_pressure(alt_current * 1000)
             vel_error_prev = velocity_error
+            if alt_current <= 0:
+                return f"Balloon Crashed"
 
-        total_dMass = initial_mass - self.helium_mass
-        total_dSand = initial_sand - self.sand
         self.alt = alt_current
         self.vertical_velocity = v_current
-        return total_dMass, total_dSand
+        self.forces = [buoyancy, -weight, drag_force, net_force+drag_force]
+        if self.volume > self.max_volume:
+            return f"Balloon burst : {self.volume}"
+        if self.helium_mass <= 0:
+            return f"Running out of resource: helium"
+        if self.sand <= 0:
+            return f"Running out of resource: sand"
+        return None
 
     def simplified_internal_controller(self, v_init, v_des, dt, pressure):
         """
@@ -195,7 +206,6 @@ class Balloon:
         # Update vertical velocity
         self.vertical_velocity = v_des
         
-        return dMass, dSand
 
     def drag_force(self, pressure: float, net_force: float, vel: float = None):
         if vel is None:
@@ -238,12 +248,10 @@ class Balloon:
         # 1️⃣ Horizontal motion (latitude & longitude updates in km)
         # print(f"target velocity: {action:.2f} m/s")
         
-        self.du_km = wind.u * dt / 1000
-        self.dv_km = wind.v * dt / 1000
-        self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
-        
+        self.move_lat_lon(dt, wind)
+
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
-        dVolume, dSand = self.internal_controller(self.vertical_velocity, action, dt, pressure)
+        self.internal_controller(self.vertical_velocity, action, dt, pressure)
 
     def simplified_step(self, wind: WindVector, dt: float, action: float = 0.0) -> None:
         """
@@ -259,7 +267,7 @@ class Balloon:
         pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
         
         # Use simplified controller
-        dMass, dSand = self.simplified_internal_controller(self.vertical_velocity, action, dt, pressure)
+        self.simplified_internal_controller(self.vertical_velocity, action, dt, pressure)
  
    
     def calc_forces(self, pressure: float):
@@ -271,14 +279,64 @@ class Balloon:
         drag_force = self.drag_force(pressure, net_force)
         return buoyancy, weight, net_force, drag_force, rho_air, total_mass
         
-    def step_with_resource(self, dt: float, dHelium: float = 0., dSand: float = 0., wind: WindVector = None):
-        # Handle wind with default value
+    def move_lat_lon(self, dt: float, wind: WindVector=None):
         if wind is None:
             wind = WindVector(0., 0.)
-        # Handle horizontal motion
         self.du_km = wind.u * dt / 1000
         self.dv_km = wind.v * dt / 1000
         self.lat, self.lon = wind_displacement_to_position(self.lat, self.lon, self.du_km, self.dv_km)
+        
+    def step_with_velocity(self, wind: WindVector, dt: float, target_velocity: float = 0.0) -> None:
+        
+        self.move_lat_lon(dt, wind)
+        pressure = self.altitude_to_pressure(self.alt*1000) 
+        result = self.internal_controller(self.vertical_velocity, target_velocity, dt, pressure, limit_volume=True)
+        return result
+    
+    def step_with_altitude(self, wind: WindVector, dt: float, target_altitude: float = 10.0) -> None:
+        self.move_lat_lon(dt, wind)
+        pressure = self.altitude_to_pressure(self.alt*1000)  # hPa
+
+        # PID parameters
+        Kp = 0.2
+        Ki = 0.005
+        Kd = 0.08
+
+        # Initialization check
+        if not hasattr(self, 'altitude_error_integral'):
+            self.altitude_error_integral = 0.0
+        if not hasattr(self, 'prev_alt'):
+            self.prev_alt = self.alt
+        if not hasattr(self, 'derivative'):
+            self.derivative = 0.0
+
+        # Errors
+        altitude_error = target_altitude - self.alt
+        altitude_error_derivative = -(self.alt - self.prev_alt) / dt  # measured derivative
+
+        # Anti-windup
+        if abs(altitude_error) < 2.0:
+            self.altitude_error_integral += altitude_error * dt
+            self.altitude_error_integral = max(min(self.altitude_error_integral, 20), -20)
+
+        # Derivative filtering
+        alpha = 0.7
+        self.derivative = alpha * self.derivative + (1 - alpha) * altitude_error_derivative
+
+        # PID control
+        target_velocity = (
+            Kp * altitude_error +
+            Ki * self.altitude_error_integral +
+            Kd * self.derivative
+        )
+
+        self.prev_alt = self.alt
+
+        result = self.internal_controller(self.vertical_velocity, target_velocity, dt, pressure, limit_volume=True)
+        return result
+
+    def step_with_resource(self, dt: float, dHelium: float = 0., dSand: float = 0., wind: WindVector = None):
+        self.move_lat_lon(dt, wind)
         alt_current = self.alt
         v_current = self.vertical_velocity  # Initialize v_current
 
@@ -313,13 +371,15 @@ class Balloon:
                 dSand, delta_Sand = 0.0, 0.0
                 
             if alt_current <= 0:
-                return f"Balloon Crashed", self.helium_mass, self.sand,[buoyancy, -weight, drag_force, net_force+drag_force]
+                return f"Balloon Crashed"
         self.alt = alt_current
         self.vertical_velocity = v_current
+        self.forces = [buoyancy, -weight, drag_force, net_force+drag_force]
         if self.volume > self.max_volume:
-            return f"Balloon burst : {self.volume}", self.helium_mass, self.sand,[buoyancy, -weight, drag_force, net_force+drag_force]
+            return f"Balloon burst : {self.volume}"
         if self.helium_mass <= 0:
-            return f"Running out of resource: helium", self.helium_mass, self.sand, [buoyancy, -weight, drag_force, net_force+drag_force]
+            return f"Running out of resource: helium"
         if self.sand <= 0:
-            return f"Running out of resource: sand", self.helium_mass, self.sand, [buoyancy, -weight, drag_force, net_force+drag_force]
-        return None, self.helium_mass, self.sand, [buoyancy, -weight, drag_force, net_force+drag_force]
+            return f"Running out of resource: sand"
+        return None
+    
