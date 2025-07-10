@@ -110,5 +110,5 @@ $RECYCLE.BIN/
 
 # ERA5 data
 era5_data.nc
-
+*.png
 # End of file 

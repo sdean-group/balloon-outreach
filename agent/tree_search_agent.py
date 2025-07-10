@@ -189,7 +189,79 @@ class TreeSearchAgent:
 
         return new_state, new_balloon_state
 
-
+    def discretize_state(self, state: np.ndarray, decimals: int = 1) -> tuple:
+        """
+        Discretize a continuous state by rounding to a specified number of decimal places.
+        
+        This function is useful for reducing the state space in A* search by grouping
+        similar states together. For example, states (1.234, 2.345, 3.456) and 
+        (1.235, 2.344, 3.457) would be considered the same when discretized to 1 decimal place.
+        
+        Args:
+            state: Continuous state as a numpy array [lat, lon, alt, t]
+            decimals: Number of decimal places to round to (default: 1)
+                     - 0: Round to nearest integer
+                     - 1: Round to 0.1 precision
+                     - 2: Round to 0.01 precision
+                     - etc.
+        
+        Returns:
+            Discretized state as a tuple of rounded values
+            
+        Example:
+            >>> agent = TreeSearchAgent(env)
+            >>> state = np.array([1.234, 2.345, 3.456, 0.0])
+            >>> discretized = agent.discretize_state(state, decimals=1)
+            >>> print(discretized)
+            (1.2, 2.3, 3.5, 0.0)
+        """
+        if not isinstance(state, np.ndarray):
+            state = np.array(state)
+        
+        # Round each component to the specified number of decimal places
+        discretized = np.round(state, decimals=decimals)
+        
+        # Convert to tuple for use as dictionary key
+        return tuple(discretized)
+    
+    def get_discretization_info(self, decimals: int = 1) -> dict:
+        """
+        Get information about the discretization process for a given precision.
+        
+        This helps understand how the discretization affects the state space.
+        
+        Args:
+            decimals: Number of decimal places to round to
+            
+        Returns:
+            Dictionary containing discretization information
+            
+        Example:
+            >>> agent = TreeSearchAgent(env)
+            >>> info = agent.get_discretization_info(decimals=1)
+            >>> print(f"Precision: {info['precision']}")
+            >>> print(f"Example discretization: {info['example']}")
+        """
+        precision = 10 ** (-decimals)
+        
+        # Create example states to show discretization
+        example_states = [
+            np.array([1.234, 2.345, 3.456, 0.0]),
+            np.array([1.235, 2.344, 3.457, 0.0]),
+            np.array([1.236, 2.343, 3.458, 0.0])
+        ]
+        
+        discretized_examples = [self.discretize_state(state, decimals) for state in example_states]
+        
+        return {
+            'decimals': decimals,
+            'precision': precision,
+            'description': f"States are rounded to {precision} precision",
+            'example_states': example_states,
+            'example_discretized': discretized_examples,
+            'example': f"States {example_states[0]} and {example_states[1]} both become {discretized_examples[0]} when discretized"
+        }
+        
     def reconstruct_path(self, came_from: dict, current_state: tuple) -> np.ndarray:
         """
         Reconstruct the path from the current state to the initial state using the 'came_from' mapping.
@@ -269,6 +341,12 @@ class TreeSearchAgent:
         f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
         # Initialize lookup table from each state to a BalloonState instance.
         state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
+
+        # open_set = [self.discretize_state(init_state,decimals=1)]  # Open set of nodes to explore
+        # came_from = {self.discretize_state(init_state,decimals=1): (None, None)}
+        # g_score = {self.discretize_state(init_state,decimals=1): 0}
+        # f_score = {self.discretize_state(init_state,decimals=1): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        # state_to_balloon = {self.discretize_state(init_state,decimals=1): self.balloon_env.balloon}
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
@@ -297,7 +375,17 @@ class TreeSearchAgent:
                     state_to_balloon_state[tuple(child_state)] = child_balloon_state
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
-
+            # for action in self.get_possible_actions(current_state):
+            #     child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
+            #     child_state_disc = self.discretize_state(child_state)
+            #     tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
+            #     if tentative_g_score < g_score.get(child_state_disc, np.inf):
+            #         came_from[child_state_disc] = (current_state, action)
+            #         g_score[child_state_disc] = tentative_g_score
+            #         f_score[child_state_disc] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+            #         state_to_balloon[child_state_disc] = child_state_balloon
+            #         if child_state_disc not in open_set:
+            #             open_set.append(child_state_disc)
             # Increment iteration count and check for max iterations.
             it += 1
             print(f"Iteration {it}/{max_iterations}")
@@ -405,6 +493,65 @@ if __name__=="__main__":
     # Case 4: Test A* with BalloonERAEnvironment.
     test_era()
 
+def test_discretization():
+    """
+    Test the improved discretization function to demonstrate its clarity and functionality.
+    """
+    print("------ Testing Discretization Function ---")
+    
+    # Create a simple environment for testing
+    np.random.seed(0)
+    env = BalloonEnvironment()
+    agent = TreeSearchAgent(balloon_env=env)
+    
+    # Test different precision levels
+    test_state = np.array([1.234567, 2.345678, 3.456789, 0.0])
+    
+    print(f"Original state: {test_state}")
+    
+    for decimals in [0, 1, 2, 3]:
+        discretized = agent.discretize_state(test_state, decimals)
+        print(f"Discretized to {decimals} decimal places: {discretized}")
+    
+    # Test the discretization info function
+    print("\n--- Discretization Information ---")
+    info = agent.get_discretization_info(decimals=1)
+    print(f"Precision: {info['precision']}")
+    print(f"Description: {info['description']}")
+    print(f"Example: {info['example']}")
+    
+    # Show how similar states get grouped together
+    print("\n--- State Grouping Example ---")
+    similar_states = [
+        np.array([1.234, 2.345, 3.456, 0.0]),
+        np.array([1.235, 2.344, 3.457, 0.0]),
+        np.array([1.236, 2.343, 3.458, 0.0])
+    ]
+    
+    for i, state in enumerate(similar_states):
+        discretized = agent.discretize_state(state, decimals=1)
+        print(f"State {i+1}: {state} -> {discretized}")
+    
+    print("All three states become the same when discretized to 1 decimal place!")
+
+
+if __name__=="__main__":
+    ## NEW TEST CASES (6/16/2025).
+
+    # # Case 1 (initial state = target state.)
+    test1()
+
+    # # # Case 2 (initial state close to target state; expecting to get sequence of 'stay' actions.)
+    test2()
+
+    # # # Case 3 [test Haversine distance metric, otherwise same as Case 2.]
+    test3()
+
+    # Case 4: Test A* with BalloonERAEnvironment.
+    test_era()
+
+    # Test the improved discretization function
+    test_discretization()
     # Expected outputs from Cases 1-3:
     # ------ Case 1: Initial state = target state ---
     # Action sequence to target: [((np.float64(0.0), np.float64(0.0), np.float64(10.0), np.float64(0.0)), None)]

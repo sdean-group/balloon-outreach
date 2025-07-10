@@ -7,7 +7,7 @@ from env.ERA_wind_field import WindField as ERAWindField, WindVector as ERAWindV
 from env.balloon import Balloon
 import xarray as xr
 import datetime as dt
-import copy
+from env.util import haversine_distance
 
 class BalloonState:
     """
@@ -28,19 +28,34 @@ class BalloonState:
         self.current_time = current_time
 
 class BaseBalloonEnvironment:
-    def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12):
+    def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12, objective:str = 'target'):
         self.balloon = balloon
-        self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt])
+        # Assumes balloon was created with initial states
+        self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt, balloon.volume, balloon.sand])
         self.dt = dt
         self.target_lat = target_lat
         self.target_lon = target_lon
         self.target_alt = target_alt
         self.current_time = 0.0
+        self.objective = objective
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         self.trajectory['lat'].append(self.balloon.lat)
         self.trajectory['lon'].append(self.balloon.lon)
         self.trajectory['alt'].append(self.balloon.alt)
     def reset(self) -> np.ndarray:
+        """ 
+        Resets balloon and environment back to initial states. 
+        """
+        self.balloon.lat = self.init_state[0]
+        self.balloon.lon = self.init_state[1]
+        self.balloon.alt = self.init_state[2]
+        self.balloon.volume = self.init_state[3]
+        self.balloon.sand = self.init_state[4]
+        self.balloon.vertical_velocity = 0.0
+        self.balloon.temperature = self.balloon.get_temperature(self.init_state[2] * 1000) 
+        self.balloon.helium_density = 0.1786
+        self.balloon.helium_mass = self.balloon.helium_density * self.balloon.volume
+
         self.current_time = 0.0
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         self.trajectory['lat'].append(self.balloon.lat)
@@ -49,7 +64,7 @@ class BaseBalloonEnvironment:
         return self._get_state()
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, str]:
         action_value = float(action[0]) if isinstance(action, np.ndarray) else float(action)
-        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt * 1000)
         wind = self.wind_field.get_wind(
             self.balloon.lon,
             self.balloon.lat,
@@ -64,7 +79,7 @@ class BaseBalloonEnvironment:
         return state, reward, done, reason
     def simplified_step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, str]:
         action_value = float(action[0]) if isinstance(action, np.ndarray) else float(action)
-        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt*1000)
         wind = self.wind_field.get_wind(
             self.balloon.lon,
             self.balloon.lat,
@@ -86,7 +101,7 @@ class BaseBalloonEnvironment:
             return True, "No helium left"
         elif self.balloon.sand <= 0:
             return True, "No sand left"
-        elif distance < 0.1:
+        elif distance < 0.1 and self.objective == 'target':
             return True, "Reached target"
         elif self.current_time >= 24:
             return True, "Time limit reached"
@@ -97,8 +112,8 @@ class BaseBalloonEnvironment:
             self.balloon.lat,
             self.balloon.lon,
             self.balloon.alt,
-            self.balloon.volume / self.balloon.max_volume,
-            self.balloon.sand / self.balloon.max_sand,
+            self.balloon.volume / self.balloon.initial_volume,
+            self.balloon.sand / self.balloon.initial_sand,
             self.balloon.vertical_velocity,
             self.current_time
         ])
@@ -120,14 +135,20 @@ class BaseBalloonEnvironment:
         return np.array(wind_column)
     
     def _get_reward(self) -> float:
-        lat_diff = self.balloon.lat - self.target_lat
-        lon_diff = self.balloon.lon - self.target_lon
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        return -distance
+        if self.objective == 'target':
+            lat_diff = self.balloon.lat - self.target_lat
+            lon_diff = self.balloon.lon - self.target_lon
+            distance = np.sqrt(lat_diff**2 + lon_diff**2)
+            return -distance
+        else:
+            distance = haversine_distance(self.init_state[1], self.init_state[0], self.balloon.lon, self.balloon.lat)
+            alt_diff = (self.balloon.alt - self.init_state[2])**2
+            return distance + alt_diff
+
     
-    def rollout_sequence_mppi_target(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
+    def rollout_sequence_mppi(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
         """
-        Executes a sequence of control steps in the environment with the target objective. Resets environment to initial state before returning.
+        Executes a sequence of control steps in the environment with the environment's objective. The environment's objective should be the same as the agent's objective. Resets environment to initial state before returning.
         Args:
             control_seq: Control sequence to evaluate
             max_steps: Maximum amount of iterations to step through
@@ -156,64 +177,10 @@ class BaseBalloonEnvironment:
             
             # Take step in environment
             state, reward, done, _ = self.simplified_step(action)
-            trajectory.append((state[0], state[1]))
+            trajectory.append((state[0], state[1], state[2]))
             
             # Accumulate cost (negative reward)
             total_cost -= reward
-            
-            # Early termination if episode ends
-            if done:
-                break
-
-        # Reset states
-        self.balloon.alt = alt
-        self.balloon.lon = lon
-        self.balloon.lat = lat
-        self.balloon.temperature = temperature
-        self.balloon.vertical_velocity = vertical_velocity
-        self.balloon.volume = volume
-        self.balloon.helium_density = helium_density
-        self.balloon.helium_mass = helium_mass
-        self.balloon.sand = sand
-        self.current_time = current_time
-        
-        return total_cost, trajectory
-    
-    def rollout_sequence_mppi_fly(self,control_seq:np.ndarray, max_steps:int) -> Tuple[float, List[float]]:
-        """
-        Executes a sequence of control steps in the environment with the fly as far objective. Resets environment to initial state before returning.
-        Args:
-            control_seq: Control sequence to evaluate
-            max_steps: Maximum amount of iterations to step through
-
-        Returns:
-            Total cost of trajectory, trajectory
-        """
-        # Saving initial states before stepping
-        alt = self.balloon.alt
-        lon = self.balloon.lon
-        lat = self.balloon.lat
-        temperature = self.balloon.temperature
-        vertical_velocity = self.balloon.vertical_velocity
-        volume = self.balloon.volume
-        helium_density = self.balloon.helium_density
-        helium_mass = self.balloon.helium_mass
-        sand = self.balloon.sand
-        current_time = self.current_time
-
-        # Rollout the control sequence
-        total_cost = 0.0
-        trajectory = []
-        # Rollout the control sequence
-        for t in range(max_steps):
-            action = np.array([control_seq[t]])
-            
-            # Take step in environment
-            state, reward, done, _ = self.simplified_step(action)
-            trajectory.append((state[0], state[1]))
-            
-            # Accumulate cost (euclidean distance from current point and initial point)
-            total_cost -= np.linalg.norm(state[:3] - self.init_state)
             
             # Early termination if episode ends
             if done:
@@ -268,7 +235,7 @@ class BaseBalloonEnvironment:
             # next_state, _, done, _ = self.step(action)
             next_state, _, done, _ = self.simplified_step(action)
             
-            trajectory.append((next_state[0], next_state[1]))
+            trajectory.append((next_state[0], next_state[1], next_state[2]))
             # Custom cost function
             cost = cost_fcn(*params, next_state, acc[0], t)
             total_cost += cost
@@ -330,9 +297,9 @@ class BaseBalloonEnvironment:
         self.current_time = state.current_time
 
 class BalloonEnvironment(BaseBalloonEnvironment):
-    def __init__(self, initial_lat=0.0, initial_lon=0.0, initial_alt=10.0, dt=60, target_lat=500, target_lon=-100, target_alt=12):
+    def __init__(self, initial_lat=0.0, initial_lon=0.0, initial_alt=10.0, dt=60, target_lat=500, target_lon=-100, target_alt=12, objective='target'):
         balloon = Balloon(initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt)
-        super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt)
+        super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, objective=objective)
         self.wind_field = DefaultWindField()
 
 
@@ -340,10 +307,10 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
     """Environment for balloon navigation using ERA5 wind field"""
     def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, add_noise: bool = True, \
                  initial_lat: float = 0.0, initial_lon: float = 0.0, initial_alt: float = 10.0, \
-                 target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, dt=60, viz = True):
+                 target_lat: float = 17, target_lon: float = 17, target_alt: float = 12, objective: str = 'target', dt=60, viz = True):
         # balloon = Balloon(initial_lat=42.6, initial_lon=-76.5, initial_alt=10.0)
         balloon = Balloon(initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt)
-        super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt)
+        super().__init__(balloon=balloon, dt=dt, target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, objective=objective)
         self.wind_field = ERAWindField(ds=ds, start_time=start_time, noise_seed=noise_seed, add_noise=add_noise)
         self.ds = ds
         self.start_time = start_time
@@ -379,7 +346,7 @@ class BalloonERAEnvironment(BaseBalloonEnvironment):
             self.ax1.set_ylim(-10, 10)
             self.ax1.set_zlim(0, 25)
             self.ax1.legend()
-            self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.max_sand])
+            self.ax2.bar(['Helium', 'Sand'], [self.balloon.helium_mass/self.balloon.initial_helium_mass, self.balloon.sand/self.balloon.initial_sand])
             self.ax2.set_ylim(0, 1)
             self.ax2.set_title('Resources')
             wind_column = self._get_wind_column()
