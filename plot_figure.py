@@ -22,9 +22,12 @@ class BalloonTrajectoryAnimator:
         self.force_arrows = []
         self.force_labels = []
         self.ani = None
-        self.lat_range = [min(latitudes)-0.01, max(latitudes)+0.01]
-        self.lon_range = [min(longitudes)-0.01, max(longitudes)+0.01]
-        self.alt_range  = [4, 26]
+        max_x_range = max((max(latitudes)-min(latitudes)), (max(longitudes)-min(longitudes))) * 0.5 + 0.5
+        mean_lat = (max(latitudes) + min(latitudes)) / 2 
+        mean_lon = (max(longitudes) + min(longitudes)) / 2 
+        self.lat_range = [mean_lat - max_x_range, mean_lat + max_x_range]
+        self.lon_range = [mean_lon - max_x_range, mean_lon + max_x_range]
+        self.alt_range  = [0, 26]
         self.lat_scale = abs((self.lat_range[1] - self.lat_range[0])) / (self.alt_range[1] - self.alt_range[0])
         self.lon_scale = abs((self.lon_range[1] - self.lon_range[0])) / (self.alt_range[1] - self.alt_range[0])
 
@@ -39,7 +42,8 @@ class BalloonTrajectoryAnimator:
 
     def draw_force_arrow(self, base_x, base_y, force_val, label, color, scale):
         if color == 'red':
-            dy = force_val / 1000.0 * 100
+            dy = force_val / 1000.0 
+            # dy =  np.sign(force_val) * (1 + 4 * (np.log(abs(force_val)) / np.log(5000)))
         else:
             dy = force_val / 1000.0
         arrow = FancyArrow(base_x, base_y, 0, dy,
@@ -210,7 +214,7 @@ class BalloonSummaryPlotter:
         ax1.set_ylabel('Altitude (km)')
         ax1.set_title('Balloon Altitude Trajectory')
         ax1.grid(True, alpha=0.3)
-        ax1.set_ylim(4, 26)
+        ax1.set_ylim(0, 26)
         ax1.legend()
 
         # Plot 2: Volume changes
@@ -220,7 +224,7 @@ class BalloonSummaryPlotter:
         ax2.set_ylabel('Volume (m³)')
         ax2.set_title('Balloon Volume Over Time')
         ax2.grid(True, alpha=0.3)
-        ax2.set_ylim(0, 1600)
+        # ax2.set_ylim(0, 1600)
         ax2.legend()
 
         # Plot 3: Resource consumption
