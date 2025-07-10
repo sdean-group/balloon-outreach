@@ -62,6 +62,7 @@ class Balloon:
         return self.air_density0 * np.exp(-altitude / 7000.0)
 
     def altitude_to_pressure(self, altitude_m: float) -> float:
+        """ Expects altitude input to be in **meters**."""
         temperature = self.get_temperature(altitude_m)
         return self.P0 * np.exp(-self.air_molar_mass * self.gravity * altitude_m / (self.R_u * temperature))
 

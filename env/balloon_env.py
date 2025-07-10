@@ -47,7 +47,7 @@ class BaseBalloonEnvironment:
         return self._get_state()
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, str]:
         action_value = float(action[0]) if isinstance(action, np.ndarray) else float(action)
-        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt * 1000)
         wind = self.wind_field.get_wind(
             self.balloon.lon,
             self.balloon.lat,
@@ -62,7 +62,7 @@ class BaseBalloonEnvironment:
         return state, reward, done, reason
     def simplified_step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, str]:
         action_value = float(action[0]) if isinstance(action, np.ndarray) else float(action)
-        pressure = self.balloon.altitude_to_pressure(self.balloon.alt)
+        pressure = self.balloon.altitude_to_pressure(self.balloon.alt*1000)
         wind = self.wind_field.get_wind(
             self.balloon.lon,
             self.balloon.lat,
