@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 ## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
+SECONDS_PER_HR = 3600
+
 # Copied over from env/balloon_env.py in branch v0_edit.
 def haversine_distance(state_start, state_end):
     """Calculate great-circle distance between two (lat, lon) points in meters."""
@@ -95,7 +97,7 @@ class TreeSearchAgent:
     Algorithm: A*
     """
     def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
-                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000):
+                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000, max_depth=None):
         if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -130,6 +132,8 @@ class TreeSearchAgent:
 
         # Max number of iterations.
         self.max_iter = max_iter
+        # Max depth.
+        self.max_depth = max_depth
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -322,12 +326,23 @@ class TreeSearchAgent:
         ax2.set_title('Altitude Distribution of Explored States')
         plt.savefig(f'altitude_distribution_{plot_suffix}.png')
 
+    def depth(self, state: np.ndarray) -> int:
+        """
+        Returns the depth of the state in the search tree (based on the time component).
+
+        Args:
+            state: Current state of the environment as a numpy array [lat, lon, alt, t in hours]
+        """
+        t_hr = state[3]
+        t_sec = t_hr * SECONDS_PER_HR  # Convert hours to seconds
+        return int(t_sec // self.balloon_env.dt)    # dt is in seconds.
+
     def select_action_sequence(self, init_state: np.ndarray, plot_suffix : str = '') -> np.ndarray:
         """
         Perform A* starting from an initial state to find a path to the target.
         Also saves a plot of explored states to disk.
 
-        Args
+        Args:
             init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
         
         Returns
@@ -343,6 +358,8 @@ class TreeSearchAgent:
         f_score = {tuple(init_state): g_score[tuple(init_state)] + h_score[tuple(init_state)]}
         # Initialize lookup table from each state to a BalloonState instance.
         state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
+        # Mark if max iterations have been reached.
+        reached_max_iter = False
 
         # open_set = [self.discretize_state(init_state,decimals=1)]  # Open set of nodes to explore
         # came_from = {self.discretize_state(init_state,decimals=1): (None, None)}
@@ -360,6 +377,7 @@ class TreeSearchAgent:
 
             # Check if we reached the goal state
             if self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
+                print("A* succeeded! Reconstructing path to target...")
                 action_sequence = self.reconstruct_path(came_from, current_state)
                 self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
                 return action_sequence
@@ -368,7 +386,9 @@ class TreeSearchAgent:
             for action in self.get_possible_actions(current_state):
                 child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
                 tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
-                if tentative_g_score < g_score.get(tuple(child_state), np.inf):
+                # If child state exceeds max depth, skip it.
+                depth_check = (self.max_depth is not None and self.depth(child_state) > self.max_depth)
+                if tentative_g_score < g_score.get(tuple(child_state), np.inf) and not depth_check:
                     # record the better path.
                     came_from[tuple(child_state)] = (current_state, action)
                     g_score[tuple(child_state)] = tentative_g_score
@@ -394,10 +414,13 @@ class TreeSearchAgent:
             print(f"Iteration {it}/{self.max_iter}")
             if it >= self.max_iter:
                 print("Max iterations reached. Stopping search.")
+                reached_max_iter = True
                 break
 
         # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
         print("A* failed. Plotting explored states...")
+        failure_reason = "Reached max iterations." if reached_max_iter else f"No path found to target for given max depth of {self.max_depth} and tolerances."
+        print(f"Failure reason: {failure_reason}")
         self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
 
         ## Even if A* fails, still return a path whose last state is
@@ -409,14 +432,14 @@ class TreeSearchAgent:
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
               distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,
-              lat_long_atol: float = 1e-2, alt_atol: float = 0.02, max_iter: int = 1000):
+              lat_long_atol: float = 1e-2, alt_atol: float = 0.02, max_iter: int = 1000, max_depth: int = None):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
-                            lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter)
+                            lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter, max_depth=max_depth)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     env.balloon = Balloon(initial_lat=initial_state[0],
