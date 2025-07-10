@@ -85,8 +85,8 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     ax.set_title(f'Balloon Trajectory in {max_steps} max steps')
     ax.set_xlabel('Longitude')
     ax.set_ylabel('Latitude')
-    ax.set_xlim(-80, -75)
-    ax.set_ylim(42,54)
+    ax.set_xlim(-83, -75)
+    ax.set_ylim(42,80)
     ax.legend()
 
     # (1,2) Altitude Profile
@@ -128,6 +128,7 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
         f"Distance: {distance:.2f} km\n"
         f"samples: {agent.num_samples}, acc_bounds: {agent.acc_bounds}\n"
         f"noise_std: {agent.noise_std}, iter: {agent.num_iterations}, horizon: {agent.horizon}\n"
+        f"temperature: {agent.temperature}\n"
         f"total duration: {total_time:.2f}"
     )
     # Place the text in the upper right of the plot area
@@ -140,7 +141,7 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     )
 
     plt.tight_layout()
-    plt.savefig(f'fig/test/balloon_summary_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h)_err_{distance:.2f}km.png')
+    plt.savefig(f'fig/test/modify_cost/balloon_summary_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png')
     plt.close()
 
     return total_reward
@@ -156,24 +157,25 @@ def main():
     initial_lon = -76.5
     initial_alt = 10.0
 
-    target_lat = 48.4
-    target_lon = -77.4
-
-    # target_lat = 52.8
-    # target_lon = -76.4
-
-    # target_lat = 45.7
-    # target_lon = -78.2
-
-    # target_lat = 44.1
+##############
+    # target_lat = 64.6
     # target_lon = -77.7
+
+    # target_lat = 64.6
+    # target_lon = -79.1
+
+    # target_lat = 76
+    # target_lon = -81.5
+
+    target_lat = 77.3
+    target_lon = -80.5
 
     target_alt = 12.0
     time_step = 120 #120 seconds
     # max_steps = 30 
     max_steps = int(1440/(time_step/60)) #1 day
     
-    noise_std = 0.1
+    noise_std = 0.05
     acc_bounds= (-0.1, 0.1)
     objective = 'target'
     # For target
@@ -183,8 +185,11 @@ def main():
     num_samples=10
     num_iterations=1
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, initial_lat=initial_lat, initial_lon=initial_lon, initial_alt=initial_alt, target_lat=target_lat, target_lon=target_lon,target_alt=target_alt, objective=objective, dt=time_step, viz=False)
-    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=num_samples, acc_bounds= acc_bounds, noise_std=noise_std, num_iterations=num_iterations, horizon=horizon,visualize=False, objective=objective)
+    agent = MPPIAgentWithCostFunction(target_lat=target_lat, target_lon=target_lon, target_alt=target_alt, num_samples=num_samples, acc_bounds= acc_bounds,  noise_std=noise_std, num_iterations=num_iterations, horizon=horizon,visualize=False, objective=objective)
     # Run one episode
+
+
+
     start = time.time()
     reward = run_episode(env, agent, max_steps=max_steps)
     print(f"Episode finished with total reward: {reward:.2f}")
@@ -194,3 +199,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+    # 
