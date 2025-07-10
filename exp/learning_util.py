@@ -225,22 +225,3 @@ def evaluate_policy(env: BalloonERAEnvironment,
                           )
 
     return total_reward
-
-# Training Function Using Loader
-def train_one_epoch(loader, policy, optimizer, loss_fn):
-    policy.train()
-    if policy.training:
-        print("→ policy is in training mode")
-    else:
-        print("→ policy is in evaluation mode")
-        
-    total_loss = 0.0
-    for x_batch, y_batch in loader:
-        optimizer.zero_grad()
-        preds = policy(x_batch)
-        loss = loss_fn(preds, y_batch)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item() * x_batch.size(0)
-    avg_loss = total_loss / len(loader.dataset)
-    return avg_loss
