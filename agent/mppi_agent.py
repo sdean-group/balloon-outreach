@@ -75,6 +75,16 @@ class MPPIAgent:
             start_time = time.time()
             for i in range(self.num_samples):
                 cost, trajectory = self._evaluate_control_sequence(acc_samples[i], vel_samples[i], state, env)
+                # clean_traj = [
+                #     (round(float(lat), 2), round(float(lon), 2), round(float(alt), 2))
+                #     for lat, lon, alt in trajectory
+                # ]
+                clean_traj = [
+                    round(float(vel), 2)
+                    for vel in vel_samples[i]
+                ]
+                # print(f"sample {i} \n cost: {cost:.2f}\n vel: {clean_traj}\n ")
+                # print(f"sample {i} \n cost: {cost:.2f}\n")
                 costs.append(cost)
                 trajectories.append(trajectory)
             end_time = time.time()
@@ -147,6 +157,35 @@ class MPPIAgent:
         vel_samples = np.clip(vel_samples, self.vel_bounds[0], self.vel_bounds[1])
         
         return acc_samples, vel_samples
+    # def _sample_control_sequences(self):
+    #     """
+    #     Sample control sequences by adding noise to the current control sequence.
+
+    #     Returns:
+    #         acc_samples: Array of shape (num_samples, horizon) containing acceleration sequences
+    #         vel_samples: Array of shape (num_samples, horizon) containing velocity sequences
+    #     """
+    #     base_sequence = self.control_sequence.copy()
+    #     noise = np.random.normal(0, self.noise_std, (self.num_samples, self.horizon))
+
+    #     # Optional: decay noise over time to reduce extreme accumulation
+    #     decay = np.linspace(1.0, 0.3, self.horizon)
+    #     noise *= decay
+
+    #     acc_samples = base_sequence + noise
+    #     acc_samples = np.clip(acc_samples, self.acc_bounds[0], self.acc_bounds[1])
+
+    #     vel_samples = np.zeros_like(acc_samples)
+    #     vel_samples[:, 0] = self.vertical_velocity + acc_samples[:, 0]
+
+    #     for t in range(1, self.horizon):
+    #         vel_samples[:, t] = vel_samples[:, t - 1] + acc_samples[:, t]
+
+    #     # Soft clip velocities
+    #     vmax = self.vel_bounds[1]
+    #     vel_samples = np.tanh(vel_samples / vmax) * vmax
+
+    #     return acc_samples, vel_samples
     
     
     def _evaluate_control_sequence(self, acc_seq: np.ndarray, control_seq: np.ndarray, 
@@ -177,13 +216,14 @@ class MPPIAgent:
             Array of weights for each control sequence
         """
         # Shift costs to prevent numerical issues
+        
         costs_shifted = costs - np.min(costs)
         
         # Compute weights using softmax
         weights = np.exp(-self.temperature * costs_shifted)
         weights = weights / np.sum(weights)
         return weights
-    
+
     def _visualize_trajectories(self, target_state:np.ndarray, init_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
         """
         Visualize the sampled trajectories and the final average trajectory for one step.
@@ -286,7 +326,8 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             lat_diff = env.balloon.lat - env.target_lat
             lon_diff = env.balloon.lon - env.target_lon
             initial_goal_cost = np.sqrt(lat_diff**2 + lon_diff**2)
-            return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target, target_state, initial_goal_cost)
+            # return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target, target_state, initial_goal_cost)
+            return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target2, target_state, initial_goal_cost)
         else:
             cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
             # Discourage looping
@@ -340,6 +381,54 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         # Total cost
         cost = (w1*distance_cost + 
                 w2*alt_diff + 
+                w3*resource_penalty + 
+                w4*acc_penalty + 
+                w5*time_penalty)
+        
+        return cost
+    def _compute_step_cost_target2(self, target_state:np.ndarray, initial_goal_cost:float, state: np.ndarray, acc: float, step: int) -> float:
+        """
+        Compute cost for a single step with the target objective.
+        
+        Args:
+            target_state: Target balloon state [target_lat, target_lon, target_alt]
+            initial_goal_cost: Euclidean distance to target point from current state
+            state: Current state [lat, lon, alt, volume, sand, vel, time, ...]
+            acc:  (vertical acceleration)
+            step: Current step in the sequence
+            
+        Returns:
+            Cost for this step
+        """
+        # Extract state components
+        w1,w2,w3,w4,w5 = 30,1,1,1,1
+        lat, lon, alt = state[0], state[1], state[2]
+        volume_ratio, sand_ratio = state[3], state[4]
+        
+        # Euclidean Distance to target
+        lat_diff = lat - target_state[0]
+        lon_diff = lon - target_state[1]
+        distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        # distance_cost = distance
+        distance_cost = distance - initial_goal_cost
+        # Altitude deviation from target. Low weight to prioritize selection of best altitude
+        # alt_diff = (abs(alt - target_state[2]))**2
+        if alt >= 18 or alt <= 8:
+            alt_cost = 10
+        else:
+            alt_cost = 0
+        # Resource penalty (encourage conservation)
+        resource_penalty = 0.1 * (1.0 - volume_ratio) + 0.1 * (1.0 - sand_ratio)
+        
+        # Action penalty (encourage smooth control)
+        acc_penalty = acc**2
+        
+        # Time penalty (encourage efficiency)
+        time_penalty = 0.01 * step
+        
+        # Total cost
+        cost = (w1*distance_cost + 
+                w2*alt_cost + 
                 w3*resource_penalty + 
                 w4*acc_penalty + 
                 w5*time_penalty)
