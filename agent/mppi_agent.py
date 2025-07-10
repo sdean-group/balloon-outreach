@@ -135,56 +135,27 @@ class MPPIAgent:
         # return np.array([optimal_acc[0]])
         return optimal_vel
     
-    # def _sample_control_sequences(self) -> np.ndarray:
-    #     """
-    #     Sample control sequences by adding noise to the current control sequence.
-        
-    #     Returns:
-    #         Array of shape (num_samples, horizon) containing control sequences
-    #     """
-    #     # Start with current control sequence
-    #     base_sequence = self.control_sequence.copy()
-        
-    #     # Add noise to create samples
-    #     noise = np.random.normal(0, self.noise_std, (self.num_samples, self.horizon))
-    
-    #     acc_samples = base_sequence + noise
-    #     acc_samples = np.clip(acc_samples, self.acc_bounds[0], self.acc_bounds[1])
-    #     # vel_samples = self.vertical_velocity + acc_samples
-    #     accumulated_acc_samples = np.cumsum(acc_samples, axis=1)
-    #     vel_samples = self.vertical_velocity + accumulated_acc_samples
-    #     # Clip to action bounds
-    #     vel_samples = np.clip(vel_samples, self.vel_bounds[0], self.vel_bounds[1])
-        
-    #     return acc_samples, vel_samples
-    def _sample_control_sequences(self):
+    def _sample_control_sequences(self) -> np.ndarray:
         """
         Sample control sequences by adding noise to the current control sequence.
-
+        
         Returns:
-            acc_samples: Array of shape (num_samples, horizon) containing acceleration sequences
-            vel_samples: Array of shape (num_samples, horizon) containing velocity sequences
+            Array of shape (num_samples, horizon) containing control sequences
         """
+        # Start with current control sequence
         base_sequence = self.control_sequence.copy()
+        
+        # Add noise to create samples
         noise = np.random.normal(0, self.noise_std, (self.num_samples, self.horizon))
-
-        # Optional: decay noise over time to reduce extreme accumulation
-        decay = np.linspace(1.0, 0.3, self.horizon)
-        noise *= decay
-
+    
         acc_samples = base_sequence + noise
         acc_samples = np.clip(acc_samples, self.acc_bounds[0], self.acc_bounds[1])
-
-        vel_samples = np.zeros_like(acc_samples)
-        vel_samples[:, 0] = self.vertical_velocity + acc_samples[:, 0]
-
-        for t in range(1, self.horizon):
-            vel_samples[:, t] = vel_samples[:, t - 1] + acc_samples[:, t]
-
-        # Soft clip velocities
-        vmax = self.vel_bounds[1]
-        vel_samples = np.tanh(vel_samples / vmax) * vmax
-
+        # vel_samples = self.vertical_velocity + acc_samples
+        accumulated_acc_samples = np.cumsum(acc_samples, axis=1)
+        vel_samples = self.vertical_velocity + accumulated_acc_samples
+        # Clip to action bounds
+        vel_samples = np.clip(vel_samples, self.vel_bounds[0], self.vel_bounds[1])
+        
         return acc_samples, vel_samples
     
     
