@@ -175,7 +175,7 @@ def main():
     # max_steps = 30 
     max_steps = int(1440/(time_step/60)) #1 day
     
-    noise_std = 0.05
+    noise_std = 0.1
     acc_bounds= (-0.1, 0.1)
     objective = 'target'
     # For target
