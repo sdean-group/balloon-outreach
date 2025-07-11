@@ -484,6 +484,8 @@ def run_astar_fly_as_far_as_possible(env, initial_lat: float, initial_long: floa
 
     Returns a sequence of actions.
     """
+    # Make sure that max_depth is not None.
+    assert max_depth is not None, "max_depth must be specified for fly-as-far-as-possible task."
     # Pairwise cost function is -haversine_distance(state1, state2),
     # heuristic is 0, and max_depth is set to a specific value.
     agent = TreeSearchAgent(balloon_env=env, distance='neg_haversine', heuristic='zero', simplified_step=simplified_step,
