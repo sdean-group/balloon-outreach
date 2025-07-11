@@ -326,7 +326,10 @@ class TreeSearchAgent:
         altitudes = [state[2] for state in expanded_set]
         fig, ax = plt.subplots()
         # longitudes should be plotted on the x-axis, latitudes on the y-axis.
-        ax.scatter(longitudes, latitudes, c='blue', label='Explored States')
+        # color based on altitudes, with different shades of blue.
+        # also put in the colorbar on the side.
+        sc = ax.scatter(longitudes, latitudes, c=altitudes, cmap='viridis', label='Explored States')
+        fig.colorbar(sc, ax=ax, label='Altitude (km)')
         # Only plot target state if goal checking is enabled.
         if self.goal_checking:
             ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
@@ -335,9 +338,6 @@ class TreeSearchAgent:
         # Only if goal checking is enabled, plot a green circle with radius lat_long_atol around the target state.
         if self.goal_checking:
             circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
-        # Write altitudes on the lat/long points.
-        for i, (lat, lon, alt) in enumerate(zip(latitudes, longitudes, altitudes)):
-            ax.text(lon, lat, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
         if self.goal_checking:
             ax.add_artist(circle)
         ax.set_xlabel('Longitude')
