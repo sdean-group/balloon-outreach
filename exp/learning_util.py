@@ -114,15 +114,15 @@ def plot_expert_summary(
     fig_dir = 'figs/'
 
     if hasattr(agent, 'objective') and agent.objective == 'target':
-        if not os.path.isdir(fig_dir + 'target'):
-            os.makedirs(fig_dir+'target')
-        plt.savefig(os.path.join(fig_dir+'target', f'modify_cost/balloon_summary_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png'))
+        if not os.path.isdir(fig_dir + 'modify_cost'):
+            os.makedirs(fig_dir+'modify_cost')
+        plt.savefig(os.path.join(fig_dir+'modify_cost', f'balloon_summary_{policy_name}_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png'))
 
     else:
         if not os.path.isdir(fig_dir + 'fly'):
             os.makedirs(fig_dir+'fly')
-        plt.savefig(os.path.join(fig_dir+'fly', f'fig/fly/balloon_summary_(({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png'))
-        
+        plt.savefig(os.path.join(fig_dir+'fly', f'balloon_summary_{policy_name}_(({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png'))
+
     plt.close()
 
 def plot_agent_trajectory(
