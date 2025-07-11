@@ -116,10 +116,10 @@ class MPPIAgent:
             # min_cost_idx = np.argmin(costs)
             # self.control_sequence = np.roll(self.control_sequence, -1)
             # self.control_sequence = np.roll(optimal_acc, -1)
+            #roll through optimal acc. but then we add 1 from acc to the running contorl seq
             # self.control_sequence[-1] = optimal_acc[0]
             self.control_sequence = optimal_acc
         if self.visualize:
-            #roll through optimal acc. but then we add 1 from acc to the running contorl seq
             final = []
             curr_velocity = self.vertical_velocity
             final.append(curr_velocity)
@@ -137,10 +137,11 @@ class MPPIAgent:
     
     def _sample_control_sequences(self) -> np.ndarray:
         """
-        Sample control sequences by adding noise to the current control sequence.
+        Sample control sequences by adding noise to the current control sequence. Velocity samples are created by accumulating acceleration samples that were generated from a normal distribution.
         
         Returns:
-            Array of shape (num_samples, horizon) containing control sequences
+            acc_samples: Array of shape (num_samples, horizon) containing acceleration sequences
+            vel_samples: Array of shape (num_samples, horizon) containing velocity sequences
         """
         # Start with current control sequence
         base_sequence = self.control_sequence.copy()
@@ -157,7 +158,6 @@ class MPPIAgent:
         vel_samples = np.clip(vel_samples, self.vel_bounds[0], self.vel_bounds[1])
         
         return acc_samples, vel_samples
-    
     
     def _evaluate_control_sequence(self, acc_seq: np.ndarray, control_seq: np.ndarray, 
                                  initial_state: np.ndarray, env:BaseBalloonEnvironment) -> Tuple[float, List[float]]:
@@ -294,13 +294,13 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         """
         if self.objective == 'target':
             target_state = np.array([env.target_lat, env.target_lon, env.target_alt])
-            lat_diff = env.balloon.lat - env.target_lat
-            lon_diff = env.balloon.lon - env.target_lon
-            initial_goal_cost = np.sqrt(lat_diff**2 + lon_diff**2)
-            # return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target, target_state, initial_goal_cost)
+            # lat_diff = env.balloon.lat - env.target_lat
+            # lon_diff = env.balloon.lon - env.target_lon
+            # initial_goal_cost = np.sqrt(lat_diff**2 + lon_diff**2)
+            initial_goal_cost = haversine_distance(env.balloon.lon, env.balloon.lon, env.target_lon, env.target_lat)
+            
             return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target2, target_state, initial_goal_cost)
         else:
-            # cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
             cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly2, env.init_state)
             # Discourage looping
             backward_penalty = 0
@@ -381,11 +381,10 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         # Euclidean Distance to target
         lat_diff = lat - target_state[0]
         lon_diff = lon - target_state[1]
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
-        # distance_cost = distance
+        distance = haversine_distance(target_state[1], target_state[0], lon,lat)
+   
         distance_cost = distance - initial_goal_cost
-        # Altitude deviation from target. Low weight to prioritize selection of best altitude
-        # alt_diff = (abs(alt - target_state[2]))**2
+        # Penalize altitudes close to limits
         if alt >= 18 or alt <= 8:
             alt_cost = 10
         else:
@@ -476,7 +475,6 @@ class MPPIAgentWithCostFunction(MPPIAgent):
         
         # Encourage distance away from init to target
         distance = 1/max(haversine_distance(init_state[1], init_state[0], lon, lat),1)
-        # distance = -haversine_distance(init_state[1], init_state[0], lon, lat)
         # Encourage altitude deviation from target. 
         if alt >= 18 or alt <= 8:
             alt_cost = 10
