@@ -105,6 +105,8 @@ class BaseBalloonEnvironment:
             distance = np.sqrt(lat_diff**2 + lon_diff**2)
             if distance < 0.1:
                 return True, "Reached target"
+            else:
+                return False, ""
         elif self.current_time >= self.time_limit:
             return True, "Time limit reached"
         else:
