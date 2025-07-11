@@ -82,6 +82,22 @@ def euclidean_distance(state1, state2):
     # Ignore time component for distance calculation.
     return np.linalg.norm(state1[:3] - state2[:3])
 
+class DiscretizeConfig:
+    """
+    Configuration class for state discretization.
+    
+    Attributes:
+        use_discretization: Whether to use discretization (default: False)
+        decimals: Number of decimal places to round to (default: 1)
+                 - 0: Round to nearest integer
+                 - 1: Round to 0.1 precision
+                 - 2: Round to 0.01 precision
+                 - etc.
+    """
+    def __init__(self, use_discretization=False, decimals=1):
+        self.use_discretization = use_discretization
+        self.decimals = decimals
+
 class TreeSearchAgent:
     """
     A simple tree search agent that constructs a search tree (nodes = states, edges = actions)
@@ -97,7 +113,7 @@ class TreeSearchAgent:
     Algorithm: A*
     """
     def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
-                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000, max_depth=None, goal_checking=True):
+                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000, max_depth=None, goal_checking=True, discretize_config=DiscretizeConfig()):
         if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -140,6 +156,9 @@ class TreeSearchAgent:
 
         # Goal checking flag.
         self.goal_checking = goal_checking
+
+        # Discretize config.
+        self.discretize_config = discretize_config
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -358,32 +377,32 @@ class TreeSearchAgent:
         Returns
             action_sequence: A sequence of (state, action) pairs leading to the target state.
         """
+        # Process initial state if discretization is enabled.
+        if self.discretize_config.use_discretization:
+            init_state_to_use = self.discretize_state(init_state, decimals=self.discretize_config.decimals)
+            print(f"Discretized initial state: {init_state}")
+        else:
+            init_state_to_use = tuple(init_state)  # Use tuple for hashing in dictionaries.
+
         # Initialize the root node with the initial state
-        open_set = [tuple(init_state)]  # Open set of nodes to explore
+        open_set = [init_state_to_use]  # Open set of nodes to explore
         expanded_set = []               # List of expanded nodes (for tracking A* progress)
         action_sequence = []
-        came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
-        g_score = {tuple(init_state): 0}
-        h_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
-        f_score = {tuple(init_state): g_score[tuple(init_state)] + h_score[tuple(init_state)]}
+        came_from = {init_state_to_use: (None,None)}  # To reconstruct the path later
+        g_score = {init_state_to_use: 0}
+        h_score = {init_state_to_use: self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
+        f_score = {init_state_to_use: g_score[init_state_to_use] + h_score[init_state_to_use]}
         # Initialize lookup table from each state to a BalloonState instance.
-        state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
+        state_to_balloon_state = {init_state_to_use: self.balloon_env.get_balloon_state()}
         # Mark if max iterations have been reached.
         reached_max_iter = False
 
-        # open_set = [self.discretize_state(init_state,decimals=1)]  # Open set of nodes to explore
-        # came_from = {self.discretize_state(init_state,decimals=1): (None, None)}
-        # g_score = {self.discretize_state(init_state,decimals=1): 0}
-        # f_score = {self.discretize_state(init_state,decimals=1): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
-        # state_to_balloon = {self.discretize_state(init_state,decimals=1): self.balloon_env.balloon}
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
             expanded_set.append(current_state)
-            # Print the came_from action (if it exists)
-            # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
             # Check if we reached the goal state
             if self.goal_checking and self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
@@ -395,30 +414,24 @@ class TreeSearchAgent:
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
                 child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
-                tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
+                # Discretize child state if discretization is enabled.
+                if self.discretize_config.use_discretization:
+                    child_state_to_use = self.discretize_state(child_state, decimals=self.discretize_config.decimals)
+                else:
+                    child_state_to_use = tuple(child_state)
+                tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
                 # If child state exceeds max depth, skip it.
                 depth_check = (self.max_depth is not None and self.depth(child_state) > self.max_depth)
-                if tentative_g_score < g_score.get(tuple(child_state), np.inf) and not depth_check:
+                if tentative_g_score < g_score.get(child_state_to_use, np.inf) and not depth_check:
                     # record the better path.
-                    came_from[tuple(child_state)] = (current_state, action)
-                    g_score[tuple(child_state)] = tentative_g_score
-                    h_score[tuple(child_state)] = self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
-                    f_score[tuple(child_state)] = g_score[tuple(child_state)] + h_score[tuple(child_state)]
+                    came_from[child_state_to_use] = (current_state, action)
+                    g_score[child_state_to_use] = tentative_g_score
+                    h_score[child_state_to_use] = self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                    f_score[child_state_to_use] = g_score[child_state_to_use] + h_score[child_state_to_use]
                     # Update the balloon for this child state.
-                    state_to_balloon_state[tuple(child_state)] = child_balloon_state
-                    if tuple(child_state) not in open_set:
-                        open_set.append(tuple(child_state))
-            # for action in self.get_possible_actions(current_state):
-            #     child_state, child_state_balloon = self.apply_action(current_state, action, state_to_balloon[current_state])
-            #     child_state_disc = self.discretize_state(child_state)
-            #     tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
-            #     if tentative_g_score < g_score.get(child_state_disc, np.inf):
-            #         came_from[child_state_disc] = (current_state, action)
-            #         g_score[child_state_disc] = tentative_g_score
-            #         f_score[child_state_disc] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
-            #         state_to_balloon[child_state_disc] = child_state_balloon
-            #         if child_state_disc not in open_set:
-            #             open_set.append(child_state_disc)
+                    state_to_balloon_state[child_state_to_use] = child_balloon_state
+                    if child_state_to_use not in open_set:
+                        open_set.append(child_state_to_use)
             # Increment iteration count and check for max iterations.
             it += 1
             print(f"Iteration {it}/{self.max_iter}")
@@ -456,14 +469,15 @@ class TreeSearchAgent:
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
               distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,
-              lat_long_atol: float = 1e-2, alt_atol: float = 0.02, max_iter: int = 1000, max_depth: int = None):
+              lat_long_atol: float = 1e-2, alt_atol: float = 0.02, max_iter: int = 1000, max_depth: int = None, discretize_config=DiscretizeConfig()):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
-                            lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter, max_depth=max_depth)
+                            lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter, max_depth=max_depth,
+                            discretize_config=discretize_config)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])
     env.balloon = Balloon(initial_lat=initial_state[0],
@@ -478,7 +492,7 @@ def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, 
 
 def run_astar_fly_as_far_as_possible(env, initial_lat: float, initial_long: float, initial_alt: float, \
                                      plot_suffix: str = "", simplified_step: bool = False,
-                                     max_iter: int = 1000, max_depth: int = 10):
+                                     max_iter: int = 1000, max_depth: int = 10, discretize_config=DiscretizeConfig()):
     """
     Run A* search to fly as far as possible from the initial state.
 
@@ -489,7 +503,7 @@ def run_astar_fly_as_far_as_possible(env, initial_lat: float, initial_long: floa
     # Pairwise cost function is -haversine_distance(state1, state2),
     # heuristic is 0, and max_depth is set to a specific value.
     agent = TreeSearchAgent(balloon_env=env, distance='neg_haversine', heuristic='zero', simplified_step=simplified_step,
-                            max_iter=max_iter, max_depth=max_depth, goal_checking=False)
+                            max_iter=max_iter, max_depth=max_depth, goal_checking=False, discretize_config=discretize_config)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])
     env.balloon = Balloon(initial_lat=initial_state[0],
