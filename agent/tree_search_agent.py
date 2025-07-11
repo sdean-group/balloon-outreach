@@ -1,6 +1,6 @@
 import numpy as np
 from env.balloon import Balloon
-from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment
+from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment,BalloonState
 import copy
 import matplotlib.pyplot as plt
 
@@ -94,7 +94,8 @@ class TreeSearchAgent:
 
     Algorithm: A*
     """
-    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean'):
+    def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
+                 lat_long_atol=1e-2, alt_atol=0.02):
         if balloon_env is not None:                     # NOTE: this represents the balloon environment for the root node only.
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -120,6 +121,12 @@ class TreeSearchAgent:
             self.heuristic = haversine_heuristic
         else:
             raise ValueError(f"Unknown heuristic: {heuristic}. Supported heuristics: 'euclidean', 'zero'.")
+        
+        self.simplified_step = simplified_step  # If True, use simplified step function.
+
+        # Tolerances for goal state checking.
+        self.lat_long_atol = lat_long_atol  # Tolerance for latitude and longitude
+        self.alt_atol = alt_atol            # Tolerance for altitude
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -147,16 +154,16 @@ class TreeSearchAgent:
         """
         return ['stay', 'ascend', 'descend']
 
-    def apply_action(self, action: str, current_balloonenv : BalloonEnvironment) -> np.ndarray:
+    def apply_action(self, action: str, current_balloonstate: BalloonState) -> tuple[np.ndarray, BalloonState]:
         """
         Apply an action to the current state and return the new state (adapted from BalloonEnvironment.step())
         
         Args:
             action: Action to apply ('stay', 'ascend', 'descend')
-            current_balloonenv: Current BalloonEnvironment instance to apply the action on (contains the balloon state).
-        
+            current_balloonstate: Current BalloonState instance to apply the action on.
+
         Returns:
-            New state after applying the action [lat, lon, alt, t], and the updated BalloonEnvironment instance.
+            New state after applying the action [lat, lon, alt, t], and the updated BalloonState instance.
         """
         # Convert action string to numerical value.
         if action == 'stay':
@@ -166,16 +173,21 @@ class TreeSearchAgent:
         elif action == 'descend':
             action_value = -1.0
 
-        # Create deep-copy of the current balloon environment.
-        balloon_env = copy.deepcopy(current_balloonenv)
+        # Push the current state into the balloon environment object associated with this instance.
+        self.balloon_env.set_balloon_state(current_balloonstate)
         
         # Step the balloon environment with the action.
-        state, _, _, _ = balloon_env.step(action_value)
-        
+        if self.simplified_step:
+            # Use simplified step function.
+            state, _, _, _ = self.balloon_env.simplified_step(action_value)
+        else:
+            state, _, _, _ = self.balloon_env.step(action_value)
+
         # Extract lat/long/alt/t from the new state, and return the updated balloon environment.
         new_state = np.array([state[0], state[1], state[2], state[6]])
+        new_balloon_state = self.balloon_env.get_balloon_state()
 
-        return new_state, balloon_env
+        return new_state, new_balloon_state
 
     def discretize_state(self, state: np.ndarray, decimals: int = 1) -> tuple:
         """
@@ -269,35 +281,43 @@ class TreeSearchAgent:
             working_state, working_action = came_from[working_state] if working_state in came_from else (None, None)
         return path[::-1]
 
-    def plot_astar_tree(self, init_state: np.ndarray, g_score: dict, lat_long_atol: float = 1e-2, plot_suffix: str = ""):
+    def plot_astar_tree(self, init_state: np.ndarray, expanded_set: list, plot_suffix: str = ""):
         """
-        Plot the A* search tree.
+        Plot the A* search tree. Also plot the altitude distribution in a separate plot.
 
         Args:
             init_state: Initial state of the environment as a numpy array [lat, lon, alt, t]
             g_score: Dictionary mapping states to their g-scores (cost from start to state)
-            lat_long_atol: Tolerance for latitude and longitude to define the goal region
         """
-        latitudes = [state[0] for state in g_score.keys()]
-        longitudes = [state[1] for state in g_score.keys()]
-        altitudes = [state[2] for state in g_score.keys()]
+        latitudes = [state[0] for state in expanded_set]
+        longitudes = [state[1] for state in expanded_set]
+        altitudes = [state[2] for state in expanded_set]
         fig, ax = plt.subplots()
-        ax.scatter(latitudes, longitudes, c='blue', label='Explored States')
-        ax.scatter(self.target_lat, self.target_lon, c='red', label='Target State', marker='x')
+        # longitudes should be plotted on the x-axis, latitudes on the y-axis.
+        ax.scatter(longitudes, latitudes, c='blue', label='Explored States')
+        ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
         # show initial state
-        ax.scatter(init_state[0], init_state[1], c='green', label='Initial State', marker='o')
+        ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o')
         # Plot a green circle with radius lat_long_atol around the target state.
-        circle = plt.Circle((self.target_lat, self.target_lon), lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
+        circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
         # Write altitudes on the lat/long points.
         for i, (lat, lon, alt) in enumerate(zip(latitudes, longitudes, altitudes)):
-            ax.text(lat, lon, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
+            ax.text(lon, lat, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
         ax.add_artist(circle)
-        ax.set_xlabel('Latitude')
-        ax.set_ylabel('Longitude')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
         ax.set_title('Explored States in A* Search')
         ax.legend()
         plt.show()
         plt.savefig(f'explored_states_{plot_suffix}.png')
+
+        # Plot altitude distribution
+        fig, ax2 = plt.subplots()
+        ax2.hist(altitudes, bins=20, color='blue', alpha=0.7)
+        ax2.set_xlabel('Altitude (km)')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Altitude Distribution of Explored States')
+        plt.savefig(f'altitude_distribution_{plot_suffix}.png')
 
     def select_action_sequence(self, init_state: np.ndarray, plot_suffix : str = '') -> np.ndarray:
         """
@@ -311,42 +331,40 @@ class TreeSearchAgent:
             action_sequence: A sequence of (state, action) pairs leading to the target state.
         """
         max_iterations = 1000  # Limit the number of iterations to prevent A* from running indefinitely.
-        # Tolerances (assume lat/long tolerance is the same; altitude tolerance is different.)
-        lat_long_atol = 1e-2  # 0.01 degrees in latitude/longitude.
-        alt_atol = 0.02  # 20 cm in altitude.
 
         # Initialize the root node with the initial state
         open_set = [tuple(init_state)]  # Open set of nodes to explore
+        expanded_set = []               # List of expanded nodes (for tracking A* progress)
         action_sequence = []
         came_from = {tuple(init_state): (None,None)}  # To reconstruct the path later
         g_score = {tuple(init_state): 0}
         f_score = {tuple(init_state): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
-        # We also need a lookup table from each state to a Balloon instance.
-        state_to_balloon_env = {tuple(init_state): self.balloon_env}
+        # Initialize lookup table from each state to a BalloonState instance.
+        state_to_balloon_state = {tuple(init_state): self.balloon_env.get_balloon_state()}
 
         # open_set = [self.discretize_state(init_state,decimals=1)]  # Open set of nodes to explore
         # came_from = {self.discretize_state(init_state,decimals=1): (None, None)}
         # g_score = {self.discretize_state(init_state,decimals=1): 0}
         # f_score = {self.discretize_state(init_state,decimals=1): self.heuristic(init_state, self.target_lat, self.target_lon, self.target_alt)}
         # state_to_balloon = {self.discretize_state(init_state,decimals=1): self.balloon_env.balloon}
-
         it = 0
         while open_set:
             # Get the node with the lowest value (cost-to-go + A* heuristic)
             current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
             open_set.remove(current_state)
+            expanded_set.append(current_state)
             # Print the came_from action (if it exists)
             # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
             # Check if we reached the goal state
-            if self.is_goal_state(current_state, atols=np.array([lat_long_atol, lat_long_atol, alt_atol])):
+            if self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
                 action_sequence = self.reconstruct_path(came_from, current_state)
-                self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
+                self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
                 return action_sequence
 
             # Generate children nodes for possible actions
             for action in self.get_possible_actions(current_state):
-                child_state, child_state_balloon_env = self.apply_action(action, state_to_balloon_env[current_state])
+                child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
                 tentative_g_score = g_score[tuple(current_state)] + self.distance(current_state, child_state)
                 if tentative_g_score < g_score.get(tuple(child_state), np.inf):
                     # record the better path.
@@ -354,7 +372,7 @@ class TreeSearchAgent:
                     g_score[tuple(child_state)] = tentative_g_score
                     f_score[tuple(child_state)] = tentative_g_score + self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
                     # Update the balloon for this child state.
-                    state_to_balloon_env[tuple(child_state)] = child_state_balloon_env
+                    state_to_balloon_state[tuple(child_state)] = child_balloon_state
                     if tuple(child_state) not in open_set:
                         open_set.append(tuple(child_state))
             # for action in self.get_possible_actions(current_state):
@@ -377,17 +395,19 @@ class TreeSearchAgent:
 
         # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
         print("A* failed. Plotting explored states...")
-        self.plot_astar_tree(init_state, g_score, lat_long_atol=lat_long_atol, plot_suffix=plot_suffix)
+        self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
 
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
-              distance='euclidean', heuristic='euclidean', plot_suffix: str = ""):
+              distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,\
+              lat_long_atol: float = 1e-2, alt_atol: float = 0.02):
     """
     Run A* search from an initial state to a target state.
 
     Returns a sequence of actions to reach the target state.
     """
-    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic)
+    agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
+                            lat_long_atol=lat_long_atol, alt_atol=alt_atol)
     # Set the balloon's initial state.
     initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
     env.balloon = Balloon(initial_lat=initial_state[0],
@@ -420,7 +440,7 @@ def test2():
     np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.14, target_lon=0.16, target_alt=10,
+              target_lat=0.03, target_lon=0.16, target_alt=10,
               distance='euclidean', heuristic='euclidean',
               plot_suffix="test2")
 
@@ -431,7 +451,7 @@ def test3():
     np.random.seed(0)
     env = BalloonEnvironment()
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.14, target_lon=0.16, target_alt=10,
+              target_lat=0.011, target_lon=0, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test3")
     
@@ -451,10 +471,9 @@ def test_era():
     start_time = dt.datetime(2024, 7, 1, 0, 0)
     # Create environment and agent
     env = BalloonERAEnvironment(ds=ds, start_time=start_time, viz=False)
-
     # Run same test case as case 3.
     run_astar(env, initial_lat=0, initial_long=0, initial_alt=10,
-              target_lat=0.060, target_lon=2.25, target_alt=10,
+              target_lat=-0.0001, target_lon=0.04, target_alt=10,
               distance='haversine', heuristic='haversine',
               plot_suffix="test_era")
 
