@@ -89,7 +89,7 @@ class TreeSearchAgent:
 
     Tasks:
     - Go to target location (specified by the balloon environment.)
-    - Fly as far as possible [not yet implemented]
+    - Fly as far as possible.
 
     State: [lat, long, alt, t]
     Action: {stay, ascend, descend}
@@ -97,7 +97,7 @@ class TreeSearchAgent:
     Algorithm: A*
     """
     def __init__(self, balloon_env=None, distance='euclidean', heuristic='euclidean', simplified_step=False,\
-                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000, max_depth=None):
+                 lat_long_atol=1e-2, alt_atol=0.02, max_iter=1000, max_depth=None, goal_checking=True):
         if balloon_env is not None:
             self.balloon_env = balloon_env
             self.target_lat = balloon_env.target_lat
@@ -111,6 +111,9 @@ class TreeSearchAgent:
             self.distance = euclidean_distance
         elif distance == 'haversine':
             self.distance = haversine_distance
+        elif distance == 'neg_haversine':
+            # Use negative Haversine distance for fly-as-far-as-possible task.
+            self.distance = lambda state1, state2: -haversine_distance(state1, state2)
         else:
             raise ValueError(f"Unknown distance metric: {distance}. Supported metrics: 'euclidean', 'haversine'.")
 
@@ -126,14 +129,17 @@ class TreeSearchAgent:
         
         self.simplified_step = simplified_step  # If True, use simplified step function.
 
-        # Tolerances for goal state checking.
+        # Tolerances for goal state checking (only for target reaching task.)
         self.lat_long_atol = lat_long_atol  # Tolerance for latitude and longitude
-        self.alt_atol = alt_atol            # Tolerance for altitude
+        self.alt_atol = alt_atol           # Tolerance for altitude
 
         # Max number of iterations.
         self.max_iter = max_iter
         # Max depth.
         self.max_depth = max_depth
+
+        # Goal checking flag.
+        self.goal_checking = goal_checking
 
     def is_goal_state(self, state: np.ndarray, atols: np.ndarray) -> bool:
         """
@@ -302,15 +308,19 @@ class TreeSearchAgent:
         fig, ax = plt.subplots()
         # longitudes should be plotted on the x-axis, latitudes on the y-axis.
         ax.scatter(longitudes, latitudes, c='blue', label='Explored States')
-        ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
+        # Only plot target state if goal checking is enabled.
+        if self.goal_checking:
+            ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
         # show initial state
         ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o')
-        # Plot a green circle with radius lat_long_atol around the target state.
-        circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
+        # Only if goal checking is enabled, plot a green circle with radius lat_long_atol around the target state.
+        if self.goal_checking:
+            circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
         # Write altitudes on the lat/long points.
         for i, (lat, lon, alt) in enumerate(zip(latitudes, longitudes, altitudes)):
             ax.text(lon, lat, f'{alt:.2f}', fontsize=8, ha='right', va='bottom', color='black')
-        ax.add_artist(circle)
+        if self.goal_checking:
+            ax.add_artist(circle)
         ax.set_xlabel('Longitude')
         ax.set_ylabel('Latitude')
         ax.set_title('Explored States in A* Search')
@@ -376,7 +386,7 @@ class TreeSearchAgent:
             # print(f"State: {current_state}, Came-from action: {came_from[tuple(current_state)][1]}")
 
             # Check if we reached the goal state
-            if self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
+            if self.goal_checking and self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
                 print("A* succeeded! Reconstructing path to target...")
                 action_sequence = self.reconstruct_path(came_from, current_state)
                 self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
@@ -417,18 +427,32 @@ class TreeSearchAgent:
                 reached_max_iter = True
                 break
 
-        # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
-        print("A* failed. Plotting explored states...")
-        failure_reason = "Reached max iterations." if reached_max_iter else f"No path found to target for given max depth of {self.max_depth} and tolerances."
-        print(f"Failure reason: {failure_reason}")
-        self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
+        if self.goal_checking:
+            # Fly-to-target task search failure handling.
 
-        ## Even if A* fails, still return a path whose last state is
-        ## as close to the target as possible.
-        print("A* failed. Returning path to the closest state to the target.")
-        best_state = min(h_score, key=h_score.get)
-        action_sequence = self.reconstruct_path(came_from, best_state)
-        return action_sequence
+            # In case of search failure, plot the all the lat/long tuples in the g_score mapping.
+            print("A* failed. Plotting explored states...")
+            failure_reason = "Reached max iterations." if reached_max_iter else f"No path found to target for given max depth of {self.max_depth} and tolerances."
+            print(f"Failure reason: {failure_reason}")
+            self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
+
+            ## Even if A* fails, still return a path whose last state is
+            ## as close to the target as possible.
+            print("A* failed. Returning path to the closest state to the target.")
+            best_state = min(h_score, key=h_score.get)
+            action_sequence = self.reconstruct_path(came_from, best_state)
+            return action_sequence
+        else:
+            # Fly-as-far-as-possible handling.
+
+            # Once we get to the end of the search, we need to return the best action sequence found.
+            # (i.e. backtrack from the state with the lowest g_score = longest distance traveled.)
+            print("A* completed. Returning best action sequence found.")
+            self.plot_astar_tree(init_state, expanded_set, plot_suffix=plot_suffix)
+
+            best_state = min(g_score, key=g_score.get)
+            action_sequence = self.reconstruct_path(came_from, best_state)
+            return action_sequence
 
 def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, target_lat: float, target_lon: float, target_alt: float,
               distance='euclidean', heuristic='euclidean', plot_suffix: str = "", simplified_step: bool = False,
@@ -441,7 +465,7 @@ def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, 
     agent = TreeSearchAgent(balloon_env=env, distance=distance, heuristic=heuristic, simplified_step=simplified_step,
                             lat_long_atol=lat_long_atol, alt_atol=alt_atol, max_iter=max_iter, max_depth=max_depth)
     # Set the balloon's initial state.
-    initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])  # Starting at (lat=0, lon=0, alt=0, t=current_time)
+    initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])
     env.balloon = Balloon(initial_lat=initial_state[0],
                           initial_lon=initial_state[1],
                           initial_alt=initial_state[2],)
@@ -450,6 +474,27 @@ def run_astar(env, initial_lat: float, initial_long: float, initial_alt: float, 
     agent.target_alt = target_alt
     action_sequence = agent.select_action_sequence(initial_state, plot_suffix=plot_suffix)
     print(f"Action sequence to target: {action_sequence}")
+    return action_sequence
+
+def run_astar_fly_as_far_as_possible(env, initial_lat: float, initial_long: float, initial_alt: float, \
+                                     plot_suffix: str = "", simplified_step: bool = False,
+                                     max_iter: int = 1000, max_depth: int = 10):
+    """
+    Run A* search to fly as far as possible from the initial state.
+
+    Returns a sequence of actions.
+    """
+    # Pairwise cost function is -haversine_distance(state1, state2),
+    # heuristic is 0, and max_depth is set to a specific value.
+    agent = TreeSearchAgent(balloon_env=env, distance='neg_haversine', heuristic='zero', simplified_step=simplified_step,
+                            max_iter=max_iter, max_depth=max_depth, goal_checking=False)
+    # Set the balloon's initial state.
+    initial_state = np.array([initial_lat, initial_long, initial_alt, env.current_time])
+    env.balloon = Balloon(initial_lat=initial_state[0],
+                          initial_lon=initial_state[1],
+                          initial_alt=initial_state[2],)
+    action_sequence = agent.select_action_sequence(initial_state, plot_suffix=plot_suffix)
+    print(f"Action sequence (flying as far as possible): {action_sequence}")
     return action_sequence
 
 ## NOTE: because of seeding right now, test cases 1-3 all have to be run in order in order to work correctly.
