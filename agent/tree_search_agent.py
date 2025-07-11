@@ -1,8 +1,8 @@
 import numpy as np
 from env.balloon import Balloon
 from env.balloon_env import BalloonEnvironment,BalloonERAEnvironment,BalloonState
-import copy
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 ## Run using: python -m agent.tree_search_agent (from within balloon-outreach directory.)
 
@@ -398,47 +398,48 @@ class TreeSearchAgent:
         reached_max_iter = False
 
         it = 0
-        while open_set:
-            # Get the node with the lowest value (cost-to-go + A* heuristic)
-            current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
-            open_set.remove(current_state)
-            expanded_set.append(current_state)
+        with tqdm(total=self.max_iter, desc="A* Search Progress", unit="iteration") as pbar:
+            while open_set:
+                # Get the node with the lowest value (cost-to-go + A* heuristic)
+                current_state = min(open_set, key=lambda state: f_score.get(state, np.inf))
+                open_set.remove(current_state)
+                expanded_set.append(current_state)
 
-            # Check if we reached the goal state
-            if self.goal_checking and self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
-                print("A* succeeded! Reconstructing path to target...")
-                action_sequence = self.reconstruct_path(came_from, current_state)
-                self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
-                return action_sequence
+                # Check if we reached the goal state
+                if self.goal_checking and self.is_goal_state(current_state, atols=np.array([self.lat_long_atol, self.lat_long_atol, self.alt_atol])):
+                    print("A* succeeded! Reconstructing path to target...")
+                    action_sequence = self.reconstruct_path(came_from, current_state)
+                    self.plot_astar_tree(init_state, g_score, plot_suffix=plot_suffix)
+                    return action_sequence
 
-            # Generate children nodes for possible actions
-            for action in self.get_possible_actions(current_state):
-                child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
-                # Discretize child state if discretization is enabled.
-                if self.discretize_config.use_discretization:
-                    child_state_to_use = self.discretize_state(child_state, decimals=self.discretize_config.decimals)
-                else:
-                    child_state_to_use = tuple(child_state)
-                tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
-                # If child state exceeds max depth, skip it.
-                depth_check = (self.max_depth is not None and self.depth(child_state) > self.max_depth)
-                if tentative_g_score < g_score.get(child_state_to_use, np.inf) and not depth_check:
-                    # record the better path.
-                    came_from[child_state_to_use] = (current_state, action)
-                    g_score[child_state_to_use] = tentative_g_score
-                    h_score[child_state_to_use] = self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
-                    f_score[child_state_to_use] = g_score[child_state_to_use] + h_score[child_state_to_use]
-                    # Update the balloon for this child state.
-                    state_to_balloon_state[child_state_to_use] = child_balloon_state
-                    if child_state_to_use not in open_set:
-                        open_set.append(child_state_to_use)
-            # Increment iteration count and check for max iterations.
-            it += 1
-            print(f"Iteration {it}/{self.max_iter}")
-            if it >= self.max_iter:
-                print("Max iterations reached. Stopping search.")
-                reached_max_iter = True
-                break
+                # Generate children nodes for possible actions
+                for action in self.get_possible_actions(current_state):
+                    child_state, child_balloon_state = self.apply_action(action, state_to_balloon_state[current_state])
+                    # Discretize child state if discretization is enabled.
+                    if self.discretize_config.use_discretization:
+                        child_state_to_use = self.discretize_state(child_state, decimals=self.discretize_config.decimals)
+                    else:
+                        child_state_to_use = tuple(child_state)
+                    tentative_g_score = g_score[current_state] + self.distance(current_state, child_state)
+                    # If child state exceeds max depth, skip it.
+                    depth_check = (self.max_depth is not None and self.depth(child_state) > self.max_depth)
+                    if tentative_g_score < g_score.get(child_state_to_use, np.inf) and not depth_check:
+                        # record the better path.
+                        came_from[child_state_to_use] = (current_state, action)
+                        g_score[child_state_to_use] = tentative_g_score
+                        h_score[child_state_to_use] = self.heuristic(child_state, self.target_lat, self.target_lon, self.target_alt)
+                        f_score[child_state_to_use] = g_score[child_state_to_use] + h_score[child_state_to_use]
+                        # Update the balloon for this child state.
+                        state_to_balloon_state[child_state_to_use] = child_balloon_state
+                        if child_state_to_use not in open_set:
+                            open_set.append(child_state_to_use)
+                # Increment iteration count and check for max iterations.
+                it += 1
+                pbar.update(1)
+                if it >= self.max_iter:
+                    print("Max iterations reached. Stopping search.")
+                    reached_max_iter = True
+                    break
 
         if self.goal_checking:
             # Fly-to-target task search failure handling.
