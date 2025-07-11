@@ -84,7 +84,7 @@ def euclidean_distance(state1, state2):
 
 class DiscretizeConfig:
     """
-    Configuration class for state discretization.
+    Configuration class for A* state discretization.
     
     Attributes:
         use_discretization: Whether to use discretization (default: False)
