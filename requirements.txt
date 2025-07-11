@@ -10,3 +10,4 @@ jax>=0.4.20
 opensimplex>=0.4.3
 netCDF4>=1.6.4 
 cartopy
+torch
