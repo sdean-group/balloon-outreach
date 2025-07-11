@@ -28,7 +28,7 @@ class BalloonState:
         self.current_time = current_time
 
 class BaseBalloonEnvironment:
-    def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12, objective:str = 'target'):
+    def __init__(self, balloon: Balloon, dt: float = 60, target_lat: float = 500, target_lon: float = -100, target_alt: float = 12, objective:str = 'target', time_limit: float = 24.0):
         self.balloon = balloon
         # Assumes balloon was created with initial states
         self.init_state = np.array([balloon.lat, balloon.lon, balloon.alt, balloon.volume, balloon.sand])
@@ -38,6 +38,7 @@ class BaseBalloonEnvironment:
         self.target_alt = target_alt
         self.current_time = 0.0
         self.objective = objective
+        self.time_limit = time_limit
         self.trajectory = {'lat': [], 'lon': [], 'alt': []}
         self.trajectory['lat'].append(self.balloon.lat)
         self.trajectory['lon'].append(self.balloon.lon)
@@ -94,19 +95,35 @@ class BaseBalloonEnvironment:
         return state, reward, done, reason
     
     def _is_done(self) -> Tuple[bool, str]:
-        lat_diff = self.balloon.lat - self.target_lat
-        lon_diff = self.balloon.lon - self.target_lon
-        distance = np.sqrt(lat_diff**2 + lon_diff**2)
         if self.balloon.helium_mass <= 0:
             return True, "No helium left"
         elif self.balloon.sand <= 0:
             return True, "No sand left"
-        elif distance < 0.1 and self.objective == 'target':
-            return True, "Reached target"
-        elif self.current_time >= 24:
+        elif self.objective == 'target':
+            lat_diff = self.balloon.lat - self.target_lat
+            lon_diff = self.balloon.lon - self.target_lon
+            distance = np.sqrt(lat_diff**2 + lon_diff**2)
+            if distance < 0.1:
+                return True, "Reached target"
+        elif self.current_time >= self.time_limit:
             return True, "Time limit reached"
         else:
             return False, ""
+        
+        # lat_diff = self.balloon.lat - self.target_lat
+        # lon_diff = self.balloon.lon - self.target_lon
+        # distance = np.sqrt(lat_diff**2 + lon_diff**2)
+        # if self.balloon.helium_mass <= 0:
+        #     return True, "No helium left"
+        # elif self.balloon.sand <= 0:
+        #     return True, "No sand left"
+        # elif distance < 0.1 and self.objective == 'target':
+        #     return True, "Reached target"
+        # elif self.current_time >= 24:
+        #     return True, "Time limit reached"
+        # else: 
+        #     return False, ""
+        
     def _get_balloon_state(self) -> np.ndarray:
         balloon_state = np.array([
             self.balloon.lat,
