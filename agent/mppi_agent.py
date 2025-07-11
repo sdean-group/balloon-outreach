@@ -300,7 +300,8 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             # return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target, target_state, initial_goal_cost)
             return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target2, target_state, initial_goal_cost)
         else:
-            cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
+            # cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly, env.init_state)
+            cost, trajectory = env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_fly2, env.init_state)
             # Discourage looping
             backward_penalty = 0
             for lat,lon, alt in trajectory:
@@ -310,6 +311,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
                 dr = cost - prev_r
             # Penalize backward motion
                 backward_penalty += -min(0, dr)  # Only nonzero if dr < 0
+            
             return cost + 10*backward_penalty, trajectory
     
     def _compute_step_cost_target(self, target_state:np.ndarray, initial_goal_cost:float, state: np.ndarray, acc: float, step: int) -> float:
@@ -446,5 +448,56 @@ class MPPIAgentWithCostFunction(MPPIAgent):
                 w4*acc_penalty + 
                 w5*time_penalty)
         
+        return cost
+    
+    def _compute_step_cost_fly2(self, init_state:np.ndarray, state: np.ndarray, acc: float, step: int) -> float:
+        """
+        Compute cost for a single step with the fly as far objective.
+        
+        Args:
+            init_state: Initial balloon state [init_lat, init_lon, init_alt]
+            state: Current state [lat, lon, alt, volume, sand, vel, time, ...]
+            acc:  (vertical acceleration)
+            step: Current step in the sequence
+            
+        Returns:
+            Cost for this step
+        """
+        # Extract state components
+        if not hasattr(self, 'volume_ratio_prev'):
+            self.volume_ratio_prev = state[3]
+            self.sand_ratio_prev = state[4]
+
+        
+        w1,w2,w3,w4,w5 = 10,1,10,1,0
+        lat, lon, alt = state[0], state[1], state[2]
+        volume_ratio, sand_ratio = state[3], state[4]
+        
+        
+        # Encourage distance away from init to target
+        distance = 1/max(haversine_distance(init_state[1], init_state[0], lon, lat),1)
+        # distance = -haversine_distance(init_state[1], init_state[0], lon, lat)
+        # Encourage altitude deviation from target. 
+        if alt >= 18 or alt <= 8:
+            alt_cost = 10
+        else:
+            alt_cost = 0
+        # Resource penalty (encourage conservation)
+        # resource_penalty = (1.0 - volume_ratio) + (1.0 - sand_ratio)
+        resource_penalty =(self.volume_ratio_prev - volume_ratio + self.sand_ratio_prev - sand_ratio)
+        # Action penalty (encourage smooth control)
+        acc_penalty = acc**2
+        
+        # Time penalty (encourage efficiency)
+        time_penalty = 0.01 * step
+        
+        # Total cost
+        cost = (w1*distance + 
+                w2*alt_cost + 
+                w3*resource_penalty + 
+                w4*acc_penalty + 
+                w5*time_penalty)
+        self.volume_ratio_prev = volume_ratio
+        self.sand_ratio_prev = sand_ratio
         return cost
     

@@ -60,7 +60,8 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     initial_pos = [round(trajectory[0][0],1), round(trajectory[0][1],1)]
     target_pos = [round(env.target_lat,1), round(env.target_lon,1)]
     end_pos = [round(trajectory[-1][0],1), round(trajectory[-1][1],1)]
-    distance = haversine_distance(target_pos[0], target_pos[1], end_pos[0], end_pos[1])
+    distance = haversine_distance(initial_pos[1], initial_pos[0], end_pos[1], end_pos[0])
+    # distance = haversine_distance(target_pos[0], target_pos[1], end_pos[0], end_pos[1])
     print(f"Initial position: {initial_pos}, Target position: {target_pos}, End position: {end_pos}, Distance: {distance} km")
     print(f"num_samples: {agent.num_samples}, acc_bounds: {agent.acc_bounds}, noise_std: {agent.noise_std}, num_iterations: {agent.num_iterations}, horizon: {agent.horizon}")
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -85,8 +86,8 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     ax.set_title(f'Balloon Trajectory in {max_steps} max steps')
     ax.set_xlabel('Longitude')
     ax.set_ylabel('Latitude')
-    ax.set_xlim(-83, -75)
-    ax.set_ylim(42,80)
+    # ax.set_xlim(-83, -75)
+    # ax.set_ylim(42,80)
     ax.legend()
 
     # (1,2) Altitude Profile
@@ -141,7 +142,8 @@ def run_episode(env: BalloonERAEnvironment, agent:MPPIAgent, max_steps: int = 10
     )
 
     plt.tight_layout()
-    plt.savefig(f'fig/test/modify_cost/balloon_summary_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png')
+    # plt.savefig(f'fig/test/modify_cost/balloon_summary_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png')
+    plt.savefig(f'fig/fly/balloon_summary_(({end_pos[0]},{end_pos[1]})_({agent.num_samples}s,{agent.num_iterations}it,{agent.horizon}h,{agent.temperature}t)_err_{distance:.2f}km.png')
     plt.close()
 
     return total_reward
@@ -177,7 +179,8 @@ def main():
     
     noise_std = 0.1
     acc_bounds= (-0.1, 0.1)
-    objective = 'target'
+    # objective = 'target'
+    objective = 'fly'
     # For target
     horizon=10
     # For fly
