@@ -15,6 +15,11 @@ class RandomAgent:
                    
         """
         # Generate a single random action in range [-1, 1]
-        action = np.random.uniform(-1.0, 1.0)
-        action = np.sin(time*3/max_steps*np.pi)
+        # action = np.random.uniform(-1.0, 1.0)
+        action = np.sin(time*3/max_steps*np.pi)*0.5
+        # if time < int(max_steps/2):
+        #     action =0.1
+        # else:
+        #     action= np.sin(time*3/max_steps*np.pi)*0.01
+        # action = 0
         return np.array([action])  # Return as numpy array for compatibility 

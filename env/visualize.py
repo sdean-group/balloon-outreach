@@ -294,3 +294,89 @@ def plot_wind_field(wind_field, pressure_level=1000, time=0):
     plt.ylabel('Latitude')
     plt.grid(True)
     plt.show()
+
+# ---------- Used in MPPI Iterative Optimization notebook ---------------
+
+def plot_accs_vels_samples(acc_samples, vel_samples, horizon):
+    """ Plot the samples of accelerations and velocities in MPPI algorithm. """
+    fig = plt.figure()
+
+    plt.subplot(2,1,1)
+    for acc_sample in acc_samples:
+        plt.plot([i for i in range(horizon)], acc_sample, 'b-', alpha=0.3)
+    plt.title(f'Acceleration Samples')
+    plt.xlabel('Timestep in Horizon')
+    plt.ylabel('Acceleration (m/s^2)')
+
+    plt.subplot(2,1,2)
+    for vel_sample in vel_samples:
+        plt.plot([i for i in range(horizon)], vel_sample, 'b-', alpha=0.3)
+    plt.title(f'Velocity Samples')
+    plt.xlabel('Timestep in Horizon')
+    plt.ylabel('Vertical Velocity (m/s)')
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('samples.png')
+    plt.show()
+    plt.close()
+
+def plot_alts_movement_samples(vert_movement, lateral_movement, horizon):
+    """ Plot the vertical and horizontal position of balloon using MPPI samples"""
+    fig = plt.figure()
+
+    plt.subplot(1,2,1)
+    for alts in vert_movement:
+        plt.plot([i for i in range(horizon + 1)], alts, 'b-', alpha=0.3)
+    plt.title(f'Altitudes of Samples')
+    plt.xlabel('Timestep in Horizon')
+    plt.ylabel('Altitude (km)')
+
+    # Graph the horizontal position of balloon
+    plt.subplot(1,2,2)
+    for paths in lateral_movement:
+        lats, lons = zip(*paths)
+        plt.plot(lons, lats, 'b-', alpha=0.3)
+    plt.title(f'Lateral Movement of Samples')
+    plt.xlabel('Longitude (deg)')
+    plt.ylabel('Latitude (deg)')
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('movement.png')
+    plt.show()
+    plt.close()
+
+def plot_costs_samples(costs):
+    """ Plots costs of sampled control sequences. If the trajectories are similar, the costs and weights are also similar. """
+    plt.bar([i for i in range(len(costs))], costs)
+    plt.title(f'Sample Costs')
+    plt.xlabel('Samples')
+    plt.ylabel('Cost')
+    plt.tight_layout()
+    plt.savefig('costs.png')
+    plt.show()
+    plt.close()
+
+def plot_vels_averaged(vel_samples, control_sequence, horizon):
+    """ Plots final averaged control sequence along with sampled control sequences."""
+    # Plot final trajectory
+    plt.figure(figsize=(12, 5))
+
+    # Position plot
+    #plt.subplot(1, 2, 1)
+    for vel_sample in vel_samples:
+        plt.plot([i for i in range(horizon)], vel_sample, 'b-', alpha=0.3)
+    plt.plot([i for i in range(horizon)], control_sequence, 'r-', alpha=1, label='Weighted velocity sequence')
+    plt.plot(0, control_sequence[0], 'm*', label='Optimal Action')
+    plt.grid(True)
+    plt.title(f'Balloon Velocity with MPPI')
+    plt.xlabel('Timestep in Horizon')
+    plt.ylabel('Vertical Velocity (m/s)')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig('velocity.png')
+    plt.show()
+    plt.close()
+
