@@ -328,13 +328,13 @@ class TreeSearchAgent:
         # longitudes should be plotted on the x-axis, latitudes on the y-axis.
         # color based on altitudes, with different shades of blue.
         # also put in the colorbar on the side.
-        sc = ax.scatter(longitudes, latitudes, c=altitudes, cmap='viridis', label='Explored States')
+        sc = ax.scatter(longitudes, latitudes, c=altitudes, cmap='magma', label='Explored States')
         fig.colorbar(sc, ax=ax, label='Altitude (km)')
         # Only plot target state if goal checking is enabled.
         if self.goal_checking:
-            ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x')
+            ax.scatter(self.target_lon, self.target_lat, c='red', label='Target State', marker='x', s=64)
         # show initial state
-        ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o')
+        ax.scatter(init_state[1], init_state[0], c='green', label='Initial State', marker='o', s=256)
         # Only if goal checking is enabled, plot a green circle with radius lat_long_atol around the target state.
         if self.goal_checking:
             circle = plt.Circle((self.target_lon, self.target_lat), self.lat_long_atol, color='green', fill=False, linestyle='--', label='Goal Region')
