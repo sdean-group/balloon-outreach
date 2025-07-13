@@ -4,41 +4,28 @@ This repository contains a balloon simulation environment for testing navigation
 
 ## Running in Google Colab
 
+To run the demo notebooks in Google Colab, follow these steps:
+
+1. Open [Google Colab](https://colab.research.google.com)
+2. Under **Open notebook** click on **Github >**
+3. Locate the relevant demo notebook on the `main` branch
+
 To run the simulation in Google Colab, follow these steps:
 
 1. Open [Google Colab](https://colab.research.google.com)
 2. Create a new notebook
-3. Copy and paste the following code into separate cells:
+3. Copy and paste the following code 
 
-### Cell 1-1 (for public repository): Clone repository and install dependencies 
 ```python
 # Clone the repository
 !git clone https://github.com/sdean-group/balloon-outreach.git
 %cd balloon-outreach
-!git checkout v0
+!git checkout main
 
 # Install required packages
 !pip install numpy matplotlib
 ```
-### Cell 1-2 (for private repository): Clone repository and install dependencies 
-```python
-# Clone the repository
-from getpass import getpass
-username = "your-github-username"  
-token = getpass("Enter your GitHub Personal Access Token: ")
 
-repo_url = f"https://{username}:{token}@github.com/sdean-group/balloon-outreach.git"
-
-!git clone $repo_url
-%cd balloon-outreach
-!git checkout v0
-
-# Install required packages
-!pip install numpy matplotlib scipy
-```
-
-
-### Cell 2: Import modules
 ```python
 import sys
 sys.path.append('.')
@@ -51,7 +38,6 @@ import matplotlib.pyplot as plt
 %matplotlib inline
 ```
 
-### Cell 3: Run simulation with random agent
 ```python
 
 # Run simulation
@@ -83,25 +69,3 @@ for _ in range(max_episode_steps):
 
 print(f"\nSimulation completed with total reward: {total_reward:.2f}")
 ```
-
-
-4. Run each cell in sequence
-
-## Action Space
-
-The simulation uses a single continuous action in the range [-1, 1]. 
-Action indicates target vertical velocity of the balloon in m/s
-
-## Visualization
-
-The simulation shows three plots:
-1. 3D trajectory of the balloon
-2. Resource levels (volume and sand)
-3. Wind speed profile
-
-## Environment Details
-
-- The balloon starts at (0, 0) at 10km altitude
-- The target is at (5, 5) at 10km altitude
-- The simulation runs for up to 24 hours
-- The balloon has limited helium and sand resources 
