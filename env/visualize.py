@@ -327,13 +327,15 @@ def plot_accs_vels_samples(acc_samples, vel_samples, horizon):
     plt.show()
     plt.close()
 
-def plot_alts_movement_samples(vert_movement, lateral_movement, horizon):
+def plot_alts_movement_samples(vert_movement, lateral_movement, horizon, target_state=None):
     """ Plot the vertical and horizontal position of balloon using MPPI samples"""
     fig = plt.figure()
-
     plt.subplot(1,2,1)
     for alts in vert_movement:
         plt.plot([i for i in range(horizon + 1)], alts, 'b-', alpha=0.3)
+    if target_state is not None:
+      plt.axhline(y=target_state[2], linewidth=1, color='r', label='Target End Altitude')
+      plt.legend()
     plt.title(f'Altitudes of Samples')
     plt.xlabel('Timestep in Horizon')
     plt.ylabel('Altitude (km)')
@@ -343,6 +345,9 @@ def plot_alts_movement_samples(vert_movement, lateral_movement, horizon):
     for paths in lateral_movement:
         lats, lons = zip(*paths)
         plt.plot(lons, lats, 'b-', alpha=0.3)
+    if target_state is not None:
+      plt.plot(target_state[1],target_state[0], 'rx', label='Target End')
+      plt.legend()
     plt.title(f'Lateral Movement of Samples')
     plt.xlabel('Longitude (deg)')
     plt.ylabel('Latitude (deg)')
@@ -355,9 +360,10 @@ def plot_alts_movement_samples(vert_movement, lateral_movement, horizon):
 
 def plot_costs_samples(costs):
     """ Plots costs of sampled control sequences. If the trajectories are similar, the costs and weights are also similar. """
-    plt.bar([i for i in range(len(costs))], costs)
+    plt.bar([i+1 for i in range(len(costs))], costs)
     plt.title(f'Sample Costs')
-    plt.xlabel('Samples')
+    plt.xlabel('Plan Number')
+    plt.xticks([i+1 for i in range(len(costs))])
     plt.ylabel('Cost')
     plt.tight_layout()
     plt.savefig('costs.png')
