@@ -5,6 +5,10 @@ from typing import Sequence, Optional
 from PIL import Image
 import matplotlib.animation as animation
 from matplotlib.patches import Ellipse, FancyArrow
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from math import cos, radians
+from datetime import datetime
 
 # Constants
 EARTH_RADIUS_KM = 6371  # Radius of the Earth in kilometres
@@ -571,10 +575,10 @@ class BalloonTrajectoryAnimator:
     def save(self, filename='balloon_traj.mp4', fps=10):
         if self.ani is not None:
             if filename.endswith('.gif'):
-                # GIF (느림)
+                # GIF (slower)
                 self.ani.save(filename, writer='pillow', fps=fps)
             else:
-                # MP4 (빠름)
+                # MP4 (faster)
                 from matplotlib.animation import FFMpegWriter
                 writer = FFMpegWriter(fps=fps, codec='libx264', bitrate=1800)
                 self.ani.save(filename, writer=writer)
@@ -641,3 +645,50 @@ class BalloonSummaryPlotter:
 
         plt.tight_layout()
         plt.show()
+
+def plot_trajectory_earth(lons, lats):
+    fig, ax = plt.subplots(
+        figsize=(12,6),
+        subplot_kw={'projection': ccrs.PlateCarree()}
+    )
+
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # around the North America
+    lon_min, lon_max = -180, 0
+    lat_min, lat_max = 0, 90
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max],
+                crs=ccrs.PlateCarree())
+
+    # add background
+    ax.add_feature(cfeature.LAND.with_scale('50m'), facecolor='lightgray')
+    ax.add_feature(cfeature.OCEAN.with_scale('50m'), facecolor='lightblue')
+    ax.coastlines('50m', linewidth=0.5)
+
+    # gridlines with labels
+    gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # plot trajectory
+    ax.plot(lons, lats,
+            transform=ccrs.PlateCarree(),
+            color='blue', linewidth=2,
+            label='Trajectory')
+
+    # start and end markers
+    ax.scatter(lons[0], lats[0],
+            transform=ccrs.PlateCarree(),
+            color='green', marker='o', s=60,
+            label='Start')
+    ax.scatter(lons[-1], lats[-1],
+            transform=ccrs.PlateCarree(),
+            color='red', marker='X', s=60,
+            label='End')
+
+    ax.set_title(f"Balloon Trajectory with Wind Field")
+    ax.set_xlabel("Longitude (°E)")
+    ax.set_ylabel("Latitude (°N)")
+    ax.legend(loc='lower left')
+
+    plt.show()
