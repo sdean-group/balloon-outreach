@@ -568,9 +568,16 @@ class BalloonTrajectoryAnimator:
         plt.tight_layout()
         plt.show()
 
-    def save(self, filename, fps=2):
+    def save(self, filename='balloon_traj.mp4', fps=10):
         if self.ani is not None:
-            self.ani.save(filename, writer='pillow', fps=fps)
+            if filename.endswith('.gif'):
+                # GIF (느림)
+                self.ani.save(filename, writer='pillow', fps=fps)
+            else:
+                # MP4 (빠름)
+                from matplotlib.animation import FFMpegWriter
+                writer = FFMpegWriter(fps=fps, codec='libx264', bitrate=1800)
+                self.ani.save(filename, writer=writer)
         else:
             print('No animation to save. Please run animate() first.')
 class BalloonSummaryPlotter:
