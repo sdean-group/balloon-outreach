@@ -652,7 +652,7 @@ class BalloonSummaryPlotter:
         plt.tight_layout()
         plt.show()
 
-def plot_trajectory_earth(lons, lats):
+def plot_trajectory_map(lons, lats):
     fig, ax = plt.subplots(
         figsize=(12,6),
         subplot_kw={'projection': ccrs.PlateCarree()}
