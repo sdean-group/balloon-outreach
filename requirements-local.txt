@@ -1,0 +1,16 @@
+numpy==1.26.4
+scipy==1.16.0
+pandas==2.3.1
+pillow==11.3.0
+xarray==2025.4.0
+netCDF4==1.7.2
+cartopy==0.24.1
+matplotlib==3.10.3
+plotly==6.2.0
+reverse_geocoder==1.5.1
+requests==2.32.4
+gdown==5.2.0
+opensimplex==0.4.5.1
+jax==0.4.38
+jaxlib==0.4.38
+torch==2.2.2
