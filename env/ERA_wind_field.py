@@ -58,7 +58,11 @@ class WindField:
 
         self.add_noise   = add_noise
         self.noise_scale = noise_scale
-        print(f"WindField initialized with noise enabled: {self.add_noise}, scale: {self.noise_scale}")
+
+        if add_noise:
+            print(f"WindField initialized with noise enabled. noise scale: {self.noise_scale}")
+        else:
+            print(f"WindField initialized with noise disabled.")
 
         # Initialize and seed the noise model with a JAX PRNGKey
         self.noise_model = SimplexWindNoise()
@@ -66,9 +70,10 @@ class WindField:
         key = jax.random.PRNGKey(seed)
         self.noise_model.reset(key)
 
-    def enable_noise(self, noise_seed: int = None):
+    def enable_noise(self, noise_seed: int = None, noise_scale:float=1.0):
         """Turn noise back on (optionally reseeding)."""
         self.add_noise = True
+        self.noise_scale = noise_scale
         self.reset_noise(noise_seed)
 
     def disable_noise(self):
