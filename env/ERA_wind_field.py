@@ -16,7 +16,7 @@ class WindVector:
     v: float  # m/s, positive northward
 
 class WindField:
-    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, add_noise: bool = True):
+    def __init__(self, ds: xr.Dataset, start_time: dt.datetime, noise_seed: int = None, noise_scale: float = 1.0, add_noise: bool = True):
         
         self.ds = ds
         self.start_time = start_time
@@ -56,8 +56,9 @@ class WindField:
             fill_value=None,
         )
 
-        self.add_noise = add_noise
-        print(f"WindField initialized with noise enabled: {self.add_noise}")
+        self.add_noise   = add_noise
+        self.noise_scale = noise_scale
+        print(f"WindField initialized with noise enabled: {self.add_noise}, scale: {self.noise_scale}")
 
         # Initialize and seed the noise model with a JAX PRNGKey
         self.noise_model = SimplexWindNoise()
@@ -110,8 +111,8 @@ class WindField:
                 elapsed_time_dt
             )
             # Extract m/s from Velocity objects
-            u_noise = noise.u.meters_per_second
-            v_noise = noise.v.meters_per_second
+            u_noise = noise.u.meters_per_second * self.noise_scale
+            v_noise = noise.v.meters_per_second * self.noise_scale
 
             return WindVector(u=u0 + u_noise, v=v0 + v_noise)
 
