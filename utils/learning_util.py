@@ -251,21 +251,146 @@ def plot_agent_summary(
 
     plt.tight_layout()
 
+    # Save the figure
     if objective == 'target':
-        if not os.path.isdir('figs/target'):
-            os.makedirs('figs/target')
-        plot_fnm = os.path.join('figs/target', f'balloon_summary_{policy_name}_({target_pos[0]},{target_pos[1]})_({end_pos[0]},{end_pos[1]})_err_{distance:.2f}km.png')
-        plt.savefig(plot_fnm)
-
+        save_dir = 'figs/target'
     else:
-        if not os.path.isdir('figs/fly'):
-            os.makedirs('figs/fly')
-        plot_fnm = os.path.join('figs/fly', f'balloon_summary_{policy_name}_(({end_pos[0]},{end_pos[1]})_err_{distance:.2f}km.png')
-        plt.savefig(plot_fnm)
-
+        save_dir = 'figs/fly'
+    os.makedirs(save_dir, exist_ok=True)
+    filename = f"balloon_summary_{policy_name}_({end_pos[0]},{end_pos[1]})_err_{distance:.2f}km.png"
+    plot_fnm = os.path.join(save_dir, filename)
+    plt.savefig(plot_fnm)
     plt.close()
 
     return plot_fnm
+
+def plot_agent_summary(
+        trajectory: list,
+        altitudes: list,
+        actions: list,
+        velocities: list,
+        helium_mass: list,
+        sands: list,
+        policy_name: str,
+        max_steps: int,
+        dt: float, 
+        objective: str = 'target',
+        target_lon: float = None,
+        target_lat: float = None,
+        target_alt: float = None
+        ):
+    
+    # --- Combined 2x2 Summary Plot ---
+    initial_pos = [round(trajectory[0][0],1), round(trajectory[0][1],1)]
+    if objective == 'target':
+        target_pos = [round(target_lat,1), round(target_lon,1)]
+    end_pos = [round(trajectory[-1][0],1), round(trajectory[-1][1],1)]
+
+    if objective == 'target':
+        distance = haversine_distance(target_pos[0], target_pos[1], end_pos[0], end_pos[1])
+        print(f"Initial position: {initial_pos}, Target position: {target_pos}, End position: {end_pos}, Distance: {distance} km")
+    else:
+        distance = haversine_distance(initial_pos[1], initial_pos[0], end_pos[1], end_pos[0])
+        print(f"Initial position: {initial_pos}, End position: {end_pos}, Distance: {distance} km")
+
+    # Create figure and axes
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    # Add a super title using policy_name
+    fig.suptitle(f"Policy: {policy_name}", fontsize=16)
+
+    # (1,1) Balloon Trajectory (Position)
+    ax = axes[0, 0]
+    lats, lons = zip(*trajectory)
+    ax.plot(lons, lats, 'b-', alpha=0.5)
+    ax.plot(lons[0], lats[0], 'go', label='Start')
+    ax.plot(lons[-1], lats[-1], 'ro', label='End')
+
+    if objective == 'target':
+        ax.plot(target_lon, target_lat, 'rx', label='Target End')
+        ax.text(target_lon, target_lat+0.1, f"({target_lat:.1f}, {target_lon:.1f})", color='red', fontsize=10, ha='center', va='bottom')
+        ax.text(target_lon, target_lat-0.4, f"error: {distance:.2f} km", color='black', fontsize=10, ha='center', va='bottom')
+
+    # Annotate start and end points
+    ax.text(lons[0], lats[0]+0.1, f"({lats[0]:.1f}, {lons[0]:.1f})", color='green', fontsize=10, ha='center', va='bottom')
+    ax.text(lons[-1], lats[-1]+0.1, f"({lats[-1]:.1f}, {lons[-1]:.1f})", color='red', fontsize=10, ha='center', va='bottom')
+
+    ax.grid(True)
+    ax.set_title(f'Balloon Trajectory in {max_steps} max steps')
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    # ax.set_xlim(-83, -75)
+    # ax.set_ylim(42,80)
+    ax.legend()
+
+    # (1,2) Altitude Profile
+    ax = axes[0, 1]
+    ax.plot(altitudes, 'b-')
+    if objective == 'target':
+        ax.axhline(y=target_alt, linewidth=1, color='r', label='Target End Altitude')
+        ax.legend()
+    ax.grid(True)
+    ax.set_title(f'Altitude Profile using {dt} delta_time')
+    ax.set_xlabel('Time Step')
+    ax.set_ylabel('Altitude (km)')
+
+    # (2,1) Target vs Current Velocity
+    ax = axes[1, 0]
+    ax.plot(actions, label='Target velocity (action)')
+    ax.plot(velocities, label='Current vertical velocity')
+    ax.set_xlabel('Step')
+    ax.set_ylabel('Velocity (m/s)')
+    ax.set_title('Target vs. Current Vertical Velocity')
+    ax.legend()
+    ax.grid(True)
+
+    # (2,2) Resource Change (helium, sand)
+    ax = axes[1, 1]
+    ax.plot(helium_mass, label='Helium Mass')
+    ax.plot(sands, label='Sand')
+    ax.set_xlabel('Step')
+    ax.set_ylabel('Resource')
+    ax.set_title('Resource Change')
+    ax.legend()
+    ax.grid(True)
+
+    # Add info text box
+    if objective == 'target':
+        info_text = (
+            f"Initial: [{initial_pos[0]}, {initial_pos[1]}]\n"
+            f"Target: [{target_pos[0]}, {target_pos[1]}]\n"
+            f"End: [{end_pos[0]}, {end_pos[1]}]\n"
+            f"Distance: {distance:.2f} km\n"
+        )
+    else:
+        info_text = (
+            f"Initial: [{initial_pos[0]}, {initial_pos[1]}]\n"
+            f"End: [{end_pos[0]}, {end_pos[1]}]\n"
+            f"Distance: {distance:.2f} km\n"
+        )
+    ax.text(
+        0.01, 0.5, info_text,
+        transform=ax.transAxes,
+        fontsize=10,
+        va='center', ha='left',
+        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none')
+    )
+
+    # Adjust layout to accommodate the super title
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Save the figure
+    if objective == 'target':
+        save_dir = 'figs/target'
+    else:
+        save_dir = 'figs/fly'
+    os.makedirs(save_dir, exist_ok=True)
+    filename = f"balloon_summary_{policy_name}_({end_pos[0]},{end_pos[1]})_err_{distance:.2f}km.png"
+    plot_fnm = os.path.join(save_dir, filename)
+    plt.savefig(plot_fnm)
+    plt.close()
+
+    return plot_fnm
+
 
 # Run an episode from an expert and collect its behavior
 def run_expert_episode(
