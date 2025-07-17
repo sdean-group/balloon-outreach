@@ -297,7 +297,7 @@ class MPPIAgentWithCostFunction(MPPIAgent):
             # lat_diff = env.balloon.lat - env.target_lat
             # lon_diff = env.balloon.lon - env.target_lon
             # initial_goal_cost = np.sqrt(lat_diff**2 + lon_diff**2)
-            initial_goal_cost = haversine_distance(env.balloon.lon, env.balloon.lon, env.target_lon, env.target_lat)
+            initial_goal_cost = haversine_distance(env.balloon.lon, env.balloon.lat, env.target_lon, env.target_lat)
             
             return env.rollout_sequence_mppi_with_cost(vel_seq, acc_seq, min(self.horizon, len(vel_seq)), self._compute_step_cost_target2, target_state, initial_goal_cost)
         else:
