@@ -218,6 +218,8 @@ class MPPIAgent:
         ax.plot3D(lons, lats,alts, 'r-', alpha=1)
         plt.plot(lons[0], lats[0],alts[0], 'bo', label='Current Point')
         plt.plot(init_state[1], init_state[0], init_state[2], 'go', label='Start')
+        plt.plot(init_state[1], init_state[0], np.linspace(0, init_state[2], 10), 'g-')
+        plt.plot(lons[0], lats[0], np.linspace(0, alts[0], 10), 'b-')
         if self.objective == 'target':
             plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
         plt.grid(True)
