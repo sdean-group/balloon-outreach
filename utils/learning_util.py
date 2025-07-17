@@ -169,6 +169,7 @@ def plot_agent_summary(
         print(f"Initial position: {initial_pos}, End position: {end_pos}, Distance: {distance} km")
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle(f"Policy: {policy_name}", fontsize=16)
 
     # (1,1) Balloon Trajectory (Position)
     ax = axes[0, 0]
