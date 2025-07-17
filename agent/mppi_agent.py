@@ -46,6 +46,7 @@ class MPPIAgent:
         self.vel_bounds = vel_bounds
         self.visualize = visualize
         self.objective = objective
+        self.actual_trajectory = []
         
         # Initialize control sequence (all zeros initially)
         self.control_sequence = np.zeros(horizon)
@@ -61,6 +62,7 @@ class MPPIAgent:
         Returns:
             Optimal action as numpy array
         """
+        self.actual_trajectory.append([env.balloon.lat, env.balloon.lon, env.balloon.alt])
         self.vertical_velocity = env.balloon.vertical_velocity
         optimal_acc_idx = step_num % self.num_iterations
         # Run new MPPI loop 
@@ -128,7 +130,7 @@ class MPPIAgent:
                 final.append(curr_velocity)
             _, control_trajectory = self._evaluate_control_sequence(optimal_acc, final, state, env)
             target_state = [env.target_lat, env.target_lon, env.target_alt]
-            self._visualize_trajectories(target_state, env.init_state, trajectories, control_trajectory)
+            self._visualize_trajectories(target_state, env.init_state, trajectories, control_trajectory, self.actual_trajectory)
 
         optimal_vel = np.array([self.vertical_velocity + self.control_sequence[optimal_acc_idx]])
         # Return first action from optimal sequence
@@ -195,7 +197,7 @@ class MPPIAgent:
         weights = weights / np.sum(weights)
         return weights
 
-    def _visualize_trajectories(self, target_state:np.ndarray, init_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray) -> None:
+    def _visualize_trajectories(self, target_state:np.ndarray, init_state:np.ndarray, trajectories: np.ndarray, final_trajectory: np.ndarray, actual_trajectory: np.ndarray=None) -> None:
         """
         Visualize the sampled trajectories and the final average trajectory for one step.
         
@@ -222,6 +224,9 @@ class MPPIAgent:
         plt.plot(lons[0], lats[0], np.linspace(0, alts[0], 10), 'b-')
         if self.objective == 'target':
             plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
+        if actual_trajectory is not None:
+            lats, lons, alts = zip(*actual_trajectory)
+            plt.plot(lons, lats, alts, 'y-', alpha=1, label='Trajectory')
         plt.grid(True)
         ax.set_title(f'Balloon Trajectory with MPPI')
         plt.xlabel('Longitude')
@@ -235,6 +240,7 @@ class MPPIAgent:
     
     def reset(self):
         """Reset the agent's internal state."""
+        self.actual_trajectory = []
         self.control_sequence = np.zeros(self.horizon)
 
 
