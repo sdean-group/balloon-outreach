@@ -225,6 +225,7 @@ class MPPIAgent:
         if self.objective == 'target':
             plt.plot(target_state[1], target_state[0], target_state[2], 'rx', label='Target End')
         if actual_trajectory is not None:
+            self.actual_trajectory.append([lats[0], lons[0], alts[0]])
             lats, lons, alts = zip(*actual_trajectory)
             plt.plot(lons, lats, alts, 'y-', alpha=1, label='Trajectory')
         plt.grid(True)
