@@ -40,6 +40,7 @@ def plot_expert_summary(
     print(f"num_samples: {agent.num_samples}, acc_bounds: {agent.acc_bounds}, noise_std: {agent.noise_std}, num_iterations: {agent.num_iterations}, horizon: {agent.horizon}")
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle(f"Policy: {policy_name}", fontsize=16)
 
     # (1,1) Balloon Trajectory (Position)
     ax = axes[0, 0]
