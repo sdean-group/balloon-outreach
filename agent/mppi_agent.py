@@ -47,6 +47,7 @@ class MPPIAgent:
         self.visualize = visualize
         self.objective = objective
         self.actual_trajectory = []
+        self.view_angle = (30, -37.5)
         
         # Initialize control sequence (all zeros initially)
         self.control_sequence = np.zeros(horizon)
@@ -206,11 +207,15 @@ class MPPIAgent:
             init_state: The balloon's original starting point
             trajectories: List of sampled control sequences
             final_trajectory: Weight average control sequence as a list of tuples [(lat1,lon1,alt1),(lat2,lon2,alt2)...]
+            view_angle: Tuple specifying the 3D view angle (elev, azim)
             
         """
         # Plot final trajectory
         plt.figure(figsize=(12, 5))
         ax = plt.axes(projection='3d')
+
+        # Set custom view angle
+        ax.view_init(elev=self.view_angle[0], azim=self.view_angle[1])
         
         # Position plot
         for trajectory in trajectories:
